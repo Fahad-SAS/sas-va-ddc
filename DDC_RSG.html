@@ -1,8 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>SAS VA Timeline DDC</title>
+  <script src="messagingUtil.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -49,6 +50,7 @@
       background-color: #00BFFF;
       border-radius: 50%;
       margin-bottom: 10px;
+      cursor: pointer;
     }
 
     .dot.latest {
@@ -91,18 +93,15 @@
       "Stargazing Deck": "🔭"
     };
 
-    // ✅ This handles SAS DATETIME40. format like: "June 25, 2014, 08:10:55 AM"
     function parseDate(value) {
       if (!value || typeof value !== 'string') return new Date("1970-01-01");
-      const cleaned = value.replace(/,/g, ''); // Remove all commas
+      const cleaned = value.replace(/,/g, ''); // Remove commas from SAS datetime
       return new Date(cleaned);
     }
 
     function renderTimeline(data) {
-      const wrapper = document.getElementById('timelineWrapper');
       const container = document.getElementById('timelineContainer');
       const line = document.getElementById('timelineLine');
-
       container.innerHTML = '';
 
       if (!data || !data.rows || data.rows.length === 0) {
@@ -134,6 +133,10 @@
         const dot = document.createElement('div');
         dot.className = 'dot';
         if (idx === latestIdx) dot.classList.add('latest');
+        dot.title = `${timestamp} - ${location}`;
+        dot.onclick = () => {
+          va.messagingUtil.postSelectionMessage(data.resultName, [idx]);
+        };
 
         const emoji = document.createElement('div');
         emoji.className = 'icon';
@@ -162,15 +165,11 @@
       });
     }
 
-    // Receive SAS VA Data
-    window.addEventListener('message', function(event) {
-    console.log("📥 SAS VA sent this data:", event.data);  // 👈 debug log
-
-    if (event.data && event.data.columns && event.data.rows) {
-      renderTimeline(event.data);
-    }
-    }, false);
-
+    // ✅ SAS-standard listener
+    va.messagingUtil.setOnDataReceivedCallback(function(data) {
+      console.log("✅ Data received from SAS VA:", data);
+      renderTimeline(data);
+    });
   </script>
 
 </body>
