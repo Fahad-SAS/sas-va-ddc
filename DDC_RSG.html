@@ -3,81 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <title>SAS VA Timeline DDC</title>
-  <script src="messagingUtil.js"></script> <!-- ✅ Make sure this is loaded -->
+
+  <!--  Load SAS helper  -->
+  <script src="messagingUtil.js"></script>
+
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 40px;
-      background-color: #00253d;
-      color: white;
-      overflow-x: auto;
+    body{
+      font-family:Arial, sans-serif;
+      padding:40px;
+      background:#00253d;
+      color:#fff;
+      overflow-x:auto;
     }
-
-    .timeline-wrapper {
-      position: relative;
-      width: fit-content;
-    }
-
-    .timeline-container {
-      display: flex;
-      align-items: center;
-      gap: 50px;
-      position: relative;
-      z-index: 1;
-    }
-
-    .line {
-      position: absolute;
-      top: 50%;
-      transform: translateY(-50%);
-      height: 2px;
-      background-color: #00BFFF;
-      z-index: 0;
-    }
-
-    .event {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      position: relative;
-      width: 120px;
-      z-index: 2;
-    }
-
-    .dot {
-      width: 20px;
-      height: 20px;
-      background-color: #00BFFF;
-      border-radius: 50%;
-      margin-bottom: 10px;
-      cursor: pointer;
-    }
-
-    .dot.latest {
-      width: 28px;
-      height: 28px;
-      background-color: #FFD700;
-      box-shadow: 0 0 12px rgba(255, 215, 0, 0.8);
-      transform: scale(1.2);
-    }
-
-    .label {
-      font-size: 13px;
-      text-align: center;
-      margin-top: 5px;
-      line-height: 1.4;
-    }
-
-    .icon {
-      font-size: 22px;
-      margin-top: -5px;
-    }
-
-    #debugBox {
-      margin-top: 40px;
-      color: #ffcc00;
-      font-size: 14px;
-    }
+    .timeline-wrapper{position:relative;width:fit-content;}
+    .timeline-container{display:flex;align-items:center;gap:50px;position:relative;z-index:1;}
+    .line{position:absolute;top:50%;transform:translateY(-50%);height:2px;background:#00BFFF;z-index:0;}
+    .event{display:flex;flex-direction:column;align-items:center;width:120px;z-index:2;}
+    .dot{width:20px;height:20px;background:#00BFFF;border-radius:50%;margin-bottom:10px;cursor:pointer;}
+    .dot.latest{width:28px;height:28px;background:#FFD700;box-shadow:0 0 12px rgba(255,215,0,.8);transform:scale(1.2);}
+    .label{font-size:13px;text-align:center;margin-top:5px;line-height:1.4;}
+    .icon{font-size:22px;margin-top:-5px;}
+    #debugBox{margin-top:40px;color:#ffcc00;font-size:14px;}
   </style>
 </head>
 <body>
@@ -90,97 +36,87 @@
   <div id="debugBox"></div>
 
   <script>
+    /* Optional: show raw-row count for quick debugging */
+    function debugLog(msg){ document.getElementById('debugBox').innerText = msg; }
+
+    /* Icons for locations (extend as you wish) */
     const locationIcons = {
-      "Pool": "🏊",
-      "Villa": "🏡",
-      "Beach": "🏖",
-      "Spa": "💆",
-      "Restaurant": "🍽️",
-      "Reception": "🛎️",
-      "Jetty": "🚤",
-      "Stargazing Deck": "🔭"
+      "Pool":"🏊", "Villa":"🏡", "Beach":"🏖",
+      "Spa":"💆", "Restaurant":"🍽️", "Reception":"🛎️",
+      "Jetty":"🚤", "Stargazing Deck":"🔭"
     };
 
-    function parseDate(value) {
-      if (!value || typeof value !== 'string') return new Date("1970-01-01");
-      const cleaned = value.replace(/,/g, ''); // remove commas for JS Date()
-      return new Date(cleaned);
-    }
+    /* ----------  KEY FIX  ---------- */
+    /* Accepts "Friday, July 4, 2025, 11:45:00 AM" or similar */
+    function parseDate(val){
+      if(!val || typeof val!=='string') return new Date('1970-01-01');
 
-    function renderTimeline(data) {
+      const cleaned = val
+        .replace(/^[A-Za-z]+,\s*/,'')  // remove weekday + comma
+        .replace(/,/g,'');             // remove remaining commas
+
+      return new Date(cleaned);        // e.g. "July 4 2025 11:45:00 AM"
+    }
+    /* -------------------------------- */
+
+    function renderTimeline(data){
       const container = document.getElementById('timelineContainer');
-      const line = document.getElementById('timelineLine');
+      const line      = document.getElementById('timelineLine');
       container.innerHTML = '';
 
-      if (!data || !data.rows || data.rows.length === 0) {
+      if(!data || !data.rows || data.rows.length===0){
         container.innerHTML = '<p>No events to display.</p>';
         return;
       }
 
-      const colIndex = {};
-      data.columns.forEach((col, i) => colIndex[col.name] = i);
+      /* map column names to indexes */
+      const colIndex={};
+      data.columns.forEach((col,i)=>colIndex[col.name]=i);
 
-      let latestIdx = 0;
-      let latestDate = parseDate(data.rows[0][colIndex['Timestamp']]);
-      data.rows.forEach((row, idx) => {
-        const rowDate = parseDate(row[colIndex['Timestamp']]);
-        if (rowDate > latestDate) {
-          latestDate = rowDate;
-          latestIdx = idx;
-        }
+      /* locate latest timestamp row */
+      let latestIdx=0, latestDate=parseDate(data.rows[0][colIndex['Timestamp']]);
+      data.rows.forEach((row,idx)=>{
+        const d=parseDate(row[colIndex['Timestamp']]);
+        if(d>latestDate){ latestDate=d; latestIdx=idx; }
       });
 
-      data.rows.forEach((row, idx) => {
-        const timestamp = row[colIndex['Timestamp']];
-        const location = row[colIndex['Location']];
-        const icon = locationIcons[location] || "📍";
+      /* build dots */
+      data.rows.forEach((row,idx)=>{
+        const ts = row[colIndex['Timestamp']];
+        const loc= row[colIndex['Location']];
+        const icon = locationIcons[loc] || "📍";
 
-        const eventDiv = document.createElement('div');
-        eventDiv.className = 'event';
+        const evt = document.createElement('div'); evt.className='event';
 
-        const dot = document.createElement('div');
-        dot.className = 'dot';
-        if (idx === latestIdx) dot.classList.add('latest');
-        dot.title = `${timestamp} - ${location}`;
-        dot.onclick = () => {
-          va.messagingUtil.postSelectionMessage(data.resultName, [idx]);
-        };
+        const dot=document.createElement('div');
+        dot.className='dot'+(idx===latestIdx?' latest':'');
+        dot.title = `${ts} – ${loc}`;
+        dot.onclick=()=>va.messagingUtil.postSelectionMessage(data.resultName,[idx]);
 
-        const emoji = document.createElement('div');
-        emoji.className = 'icon';
-        emoji.textContent = icon;
+        const emoji=document.createElement('div'); emoji.className='icon'; emoji.textContent=icon;
+        const label=document.createElement('div'); label.className='label';
+        label.innerHTML=`<strong>${ts}</strong><br>${loc}`;
 
-        const label = document.createElement('div');
-        label.className = 'label';
-        label.innerHTML = `<strong>${timestamp}</strong><br>${location}`;
-
-        eventDiv.appendChild(dot);
-        eventDiv.appendChild(emoji);
-        eventDiv.appendChild(label);
-        container.appendChild(eventDiv);
+        evt.append(dot,emoji,label);
+        container.appendChild(evt);
       });
 
-      requestAnimationFrame(() => {
-        const events = container.querySelectorAll('.event');
-        if (events.length > 1) {
-          const first = events[0];
-          const last = events[events.length - 1];
-          const startX = first.offsetLeft + first.offsetWidth / 2;
-          const endX = last.offsetLeft + last.offsetWidth / 2;
-          line.style.left = `${startX}px`;
-          line.style.width = `${endX - startX}px`;
+      /* draw connecting line only under events */
+      requestAnimationFrame(()=>{
+        const evts=container.querySelectorAll('.event');
+        if(evts.length>1){
+          const first=evts[0], last=evts[evts.length-1];
+          const start=first.offsetLeft+first.offsetWidth/2;
+          const end  =last.offsetLeft +last.offsetWidth /2;
+          line.style.left = `${start}px`;
+          line.style.width= `${end-start}px`;
         }
       });
     }
 
-    // Fallback debug message
-    function debugLog(msg) {
-      document.getElementById('debugBox').innerText = msg;
-    }
-
-    // SAS VA connection
-    va.messagingUtil.setOnDataReceivedCallback(function(data) {
-      debugLog("✅ Data received: " + data.rows.length + " rows");
+    /* Connect to SAS VA */
+    va.messagingUtil.setOnDataReceivedCallback(data=>{
+      debugLog('✅ Data received: '+data.rows.length+' row(s)');
       renderTimeline(data);
     });
   </script>
