@@ -91,8 +91,11 @@
       "Stargazing Deck": "🔭"
     };
 
+    // ✅ This handles SAS DATETIME40. format like: "June 25, 2014, 08:10:55 AM"
     function parseDate(value) {
-      return new Date(value);
+      if (!value || typeof value !== 'string') return new Date("1970-01-01");
+      const cleaned = value.replace(/,/g, ''); // Remove all commas
+      return new Date(cleaned);
     }
 
     function renderTimeline(data) {
@@ -159,7 +162,7 @@
       });
     }
 
-    // Receive data from SAS VA
+    // Receive SAS VA Data
     window.addEventListener('message', function(event) {
       if (event.data && event.data.columns && event.data.rows) {
         renderTimeline(event.data);
