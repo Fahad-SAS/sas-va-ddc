@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>SAS VA Timeline DDC</title>
-  <script src="messagingUtil.js"></script>
+  <script src="messagingUtil.js"></script> <!-- ✅ Make sure this is loaded -->
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -72,6 +72,12 @@
       font-size: 22px;
       margin-top: -5px;
     }
+
+    #debugBox {
+      margin-top: 40px;
+      color: #ffcc00;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -80,6 +86,8 @@
     <div class="line" id="timelineLine"></div>
     <div class="timeline-container" id="timelineContainer"></div>
   </div>
+
+  <div id="debugBox"></div>
 
   <script>
     const locationIcons = {
@@ -95,7 +103,7 @@
 
     function parseDate(value) {
       if (!value || typeof value !== 'string') return new Date("1970-01-01");
-      const cleaned = value.replace(/,/g, ''); // Remove commas from SAS datetime
+      const cleaned = value.replace(/,/g, ''); // remove commas for JS Date()
       return new Date(cleaned);
     }
 
@@ -165,9 +173,14 @@
       });
     }
 
-    // ✅ SAS-standard listener
+    // Fallback debug message
+    function debugLog(msg) {
+      document.getElementById('debugBox').innerText = msg;
+    }
+
+    // SAS VA connection
     va.messagingUtil.setOnDataReceivedCallback(function(data) {
-      console.log("✅ Data received from SAS VA:", data);
+      debugLog("✅ Data received: " + data.rows.length + " rows");
       renderTimeline(data);
     });
   </script>
