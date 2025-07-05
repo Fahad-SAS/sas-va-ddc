@@ -164,10 +164,13 @@
 
     // Receive SAS VA Data
     window.addEventListener('message', function(event) {
-      if (event.data && event.data.columns && event.data.rows) {
-        renderTimeline(event.data);
-      }
+    console.log("📥 SAS VA sent this data:", event.data);  // 👈 debug log
+
+    if (event.data && event.data.columns && event.data.rows) {
+      renderTimeline(event.data);
+    }
     }, false);
+
   </script>
 
 </body>
