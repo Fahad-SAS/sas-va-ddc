@@ -3,18 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <title>SAS VA Timeline DDC</title>
-
-  <!--  Load SAS helper  -->
   <script src="messagingUtil.js"></script>
 
   <style>
-    body{
-      font-family:Arial, sans-serif;
-      padding:40px;
-      background:#00253d;
-      color:#fff;
-      overflow-x:auto;
-    }
+    body{font-family:Arial, sans-serif;padding:40px;background:#00253d;color:#fff;overflow-x:auto;}
     .timeline-wrapper{position:relative;width:fit-content;}
     .timeline-container{display:flex;align-items:center;gap:50px;position:relative;z-index:1;}
     .line{position:absolute;top:50%;transform:translateY(-50%);height:2px;background:#00BFFF;z-index:0;}
@@ -36,88 +28,88 @@
   <div id="debugBox"></div>
 
   <script>
-    /* Optional: show raw-row count for quick debugging */
-    function debugLog(msg){ document.getElementById('debugBox').innerText = msg; }
-
-    /* Icons for locations (extend as you wish) */
-    const locationIcons = {
-      "Pool":"🏊", "Villa":"🏡", "Beach":"🏖",
-      "Spa":"💆", "Restaurant":"🍽️", "Reception":"🛎️",
-      "Jetty":"🚤", "Stargazing Deck":"🔭"
+    const locationIcons={
+      "Pool":"🏊","Villa":"🏡","Beach":"🏖","Spa":"💆","Restaurant":"🍽️","Reception":"🛎️",
+      "Jetty":"🚤","Stargazing Deck":"🔭"
     };
 
-    /* ----------  KEY FIX  ---------- */
-    /* Accepts "Friday, July 4, 2025, 11:45:00 AM" or similar */
-    function parseDate(val){
-      if(!val || typeof val!=='string') return new Date('1970-01-01');
-
-      const cleaned = val
-        .replace(/^[A-Za-z]+,\s*/,'')  // remove weekday + comma
-        .replace(/,/g,'');             // remove remaining commas
-
-      return new Date(cleaned);        // e.g. "July 4 2025 11:45:00 AM"
+    /* Parse "Friday, July 4, 2025, 11:45:00 AM" */
+    function parseDate(v){
+      if(!v||typeof v!=='string') return new Date('1970-01-01');
+      const cleaned=v.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,'');
+      return new Date(cleaned);
     }
-    /* -------------------------------- */
 
     function renderTimeline(data){
-      const container = document.getElementById('timelineContainer');
-      const line      = document.getElementById('timelineLine');
-      container.innerHTML = '';
+      const container=document.getElementById('timelineContainer');
+      const line=document.getElementById('timelineLine');
+      container.innerHTML='';
 
-      if(!data || !data.rows || data.rows.length===0){
-        container.innerHTML = '<p>No events to display.</p>';
+      /* rows may come as data.rows OR data.data */
+      const rows = data.rows || data.data || [];
+      if(rows.length===0){
+        container.innerHTML='<p>No events to display.</p>';
         return;
       }
 
-      /* map column names to indexes */
+      /* build lookup by LABEL first, fallback NAME */
       const colIndex={};
-      data.columns.forEach((col,i)=>colIndex[col.name]=i);
-
-      /* locate latest timestamp row */
-      let latestIdx=0, latestDate=parseDate(data.rows[0][colIndex['Timestamp']]);
-      data.rows.forEach((row,idx)=>{
-        const d=parseDate(row[colIndex['Timestamp']]);
-        if(d>latestDate){ latestDate=d; latestIdx=idx; }
+      data.columns.forEach((col,i)=>{
+        const key=(col.label||col.name||'').trim();
+        colIndex[key]=i;
       });
 
-      /* build dots */
-      data.rows.forEach((row,idx)=>{
-        const ts = row[colIndex['Timestamp']];
-        const loc= row[colIndex['Location']];
-        const icon = locationIcons[loc] || "📍";
+      const tsKey = Object.keys(colIndex).find(k=>k.toLowerCase().includes('timestamp')) || rows[0];
+      const locKey= Object.keys(colIndex).find(k=>k.toLowerCase().includes('location'))  || rows[1];
 
-        const evt = document.createElement('div'); evt.className='event';
+      /* find latest */
+      let latestIdx=0, latestDate=parseDate(rows[0][colIndex[tsKey]]);
+      rows.forEach((r,i)=>{
+        const d=parseDate(r[colIndex[tsKey]]);
+        if(d>latestDate){ latestDate=d; latestIdx=i; }
+      });
+
+      /* draw dots */
+      rows.forEach((r,i)=>{
+        const ts = r[colIndex[tsKey]];
+        const loc= r[colIndex[locKey]];
+        const icon=locationIcons[loc]||"📍";
+
+        const ev=document.createElement('div'); ev.className='event';
 
         const dot=document.createElement('div');
-        dot.className='dot'+(idx===latestIdx?' latest':'');
-        dot.title = `${ts} – ${loc}`;
-        dot.onclick=()=>va.messagingUtil.postSelectionMessage(data.resultName,[idx]);
+        dot.className='dot'; if(i===latestIdx) dot.classList.add('latest');
+        dot.title=`${ts} – ${loc}`;
+        dot.onclick=()=>va.messagingUtil.postSelectionMessage(data.resultName,[i]);
 
         const emoji=document.createElement('div'); emoji.className='icon'; emoji.textContent=icon;
         const label=document.createElement('div'); label.className='label';
         label.innerHTML=`<strong>${ts}</strong><br>${loc}`;
 
-        evt.append(dot,emoji,label);
-        container.appendChild(evt);
+        ev.append(dot,emoji,label); container.appendChild(ev);
       });
 
-      /* draw connecting line only under events */
       requestAnimationFrame(()=>{
-        const evts=container.querySelectorAll('.event');
-        if(evts.length>1){
-          const first=evts[0], last=evts[evts.length-1];
-          const start=first.offsetLeft+first.offsetWidth/2;
-          const end  =last.offsetLeft +last.offsetWidth /2;
-          line.style.left = `${start}px`;
-          line.style.width= `${end-start}px`;
+        const ev=container.querySelectorAll('.event');
+        if(ev.length>1){
+          const start=ev[0].offsetLeft+ev[0].offsetWidth/2;
+          const end  =ev[ev.length-1].offsetLeft+ev[ev.length-1].offsetWidth/2;
+          line.style.left=`${start}px`; line.style.width=`${end-start}px`;
         }
       });
     }
 
-    /* Connect to SAS VA */
-    va.messagingUtil.setOnDataReceivedCallback(data=>{
-      debugLog('✅ Data received: '+data.rows.length+' row(s)');
-      renderTimeline(data);
+    /* minimal visual debug */
+    function dbg(m){document.getElementById('debugBox').innerText=m;}
+
+    /* receive via SAS helper; also log raw event as fallback */
+    window.addEventListener('message',e=>{
+      if(!(window.va&&va.messagingUtil)) dbg('⚠️ messagingUtil unavailable');
+    });
+
+    va.messagingUtil.setOnDataReceivedCallback(d=>{
+      dbg(`✅ rows received: ${(d.rows||d.data||[]).length}`);
+      renderTimeline(d);
     });
   </script>
 
