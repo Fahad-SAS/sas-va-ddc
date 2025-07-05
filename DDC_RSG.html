@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SAS VA Timeline DDC</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 40px;
+      background-color: #00253d;
+      color: white;
+      overflow-x: auto;
+    }
+
+    .timeline-wrapper {
+      position: relative;
+      width: fit-content;
+    }
+
+    .timeline-container {
+      display: flex;
+      align-items: center;
+      gap: 50px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .line {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 2px;
+      background-color: #00BFFF;
+      z-index: 0;
+    }
+
+    .event {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+      width: 120px;
+      z-index: 2;
+    }
+
+    .dot {
+      width: 20px;
+      height: 20px;
+      background-color: #00BFFF;
+      border-radius: 50%;
+      margin-bottom: 10px;
+    }
+
+    .dot.latest {
+      width: 28px;
+      height: 28px;
+      background-color: #FFD700;
+      box-shadow: 0 0 12px rgba(255, 215, 0, 0.8);
+      transform: scale(1.2);
+    }
+
+    .label {
+      font-size: 13px;
+      text-align: center;
+      margin-top: 5px;
+      line-height: 1.4;
+    }
+
+    .icon {
+      font-size: 22px;
+      margin-top: -5px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="timeline-wrapper" id="timelineWrapper">
+    <div class="line" id="timelineLine"></div>
+    <div class="timeline-container" id="timelineContainer"></div>
+  </div>
+
+  <script>
+    const locationIcons = {
+      "Pool": "🏊",
+      "Villa": "🏡",
+      "Beach": "🏖",
+      "Spa": "💆",
+      "Restaurant": "🍽️",
+      "Reception": "🛎️",
+      "Jetty": "🚤",
+      "Stargazing Deck": "🔭"
+    };
+
+    function parseDate(value) {
+      return new Date(value);
+    }
+
+    function renderTimeline(data) {
+      const wrapper = document.getElementById('timelineWrapper');
+      const container = document.getElementById('timelineContainer');
+      const line = document.getElementById('timelineLine');
+
+      container.innerHTML = '';
+
+      if (!data || !data.rows || data.rows.length === 0) {
+        container.innerHTML = '<p>No events to display.</p>';
+        return;
+      }
+
+      const colIndex = {};
+      data.columns.forEach((col, i) => colIndex[col.name] = i);
+
+      let latestIdx = 0;
+      let latestDate = parseDate(data.rows[0][colIndex['Timestamp']]);
+      data.rows.forEach((row, idx) => {
+        const rowDate = parseDate(row[colIndex['Timestamp']]);
+        if (rowDate > latestDate) {
+          latestDate = rowDate;
+          latestIdx = idx;
+        }
+      });
+
+      data.rows.forEach((row, idx) => {
+        const timestamp = row[colIndex['Timestamp']];
+        const location = row[colIndex['Location']];
+        const icon = locationIcons[location] || "📍";
+
+        const eventDiv = document.createElement('div');
+        eventDiv.className = 'event';
+
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+        if (idx === latestIdx) dot.classList.add('latest');
+
+        const emoji = document.createElement('div');
+        emoji.className = 'icon';
+        emoji.textContent = icon;
+
+        const label = document.createElement('div');
+        label.className = 'label';
+        label.innerHTML = `<strong>${timestamp}</strong><br>${location}`;
+
+        eventDiv.appendChild(dot);
+        eventDiv.appendChild(emoji);
+        eventDiv.appendChild(label);
+        container.appendChild(eventDiv);
+      });
+
+      requestAnimationFrame(() => {
+        const events = container.querySelectorAll('.event');
+        if (events.length > 1) {
+          const first = events[0];
+          const last = events[events.length - 1];
+          const startX = first.offsetLeft + first.offsetWidth / 2;
+          const endX = last.offsetLeft + last.offsetWidth / 2;
+          line.style.left = `${startX}px`;
+          line.style.width = `${endX - startX}px`;
+        }
+      });
+    }
+
+    // Receive data from SAS VA
+    window.addEventListener('message', function(event) {
+      if (event.data && event.data.columns && event.data.rows) {
+        renderTimeline(event.data);
+      }
+    }, false);
+  </script>
+
+</body>
+</html>
