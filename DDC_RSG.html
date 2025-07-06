@@ -2,141 +2,155 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SAS VA Timeline DDC – Pool Note at Last Dot</title>
+  <title>SAS VA Timeline DDC – Pool Note</title>
   <script src="messagingUtil.js"></script>
 
   <style>
-    body{font-family:Arial, sans-serif;padding:40px;background:#00253d;color:#fff;overflow-x:auto;}
+    body{
+      font-family:Arial, sans-serif;
+      padding:40px;
+      background:#00253d;
+      color:#fff;
+      overflow-x:auto;
+    }
+
     .timeline-wrapper{position:relative;width:fit-content;}
     .timeline-container{display:flex;align-items:center;gap:50px;position:relative;z-index:1;}
-    .line{position:absolute;top:50%;transform:translateY(-50%);height:2px;background:#00BFFF;z-index:0;}
 
-    .event{position:relative;display:flex;flex-direction:column;align-items:center;width:140px;z-index:2;}
+    /* blue line */
+    .line{
+      position:absolute;
+      top:50%;transform:translateY(-50%);
+      height:2px;background:#00BFFF;z-index:0;
+    }
 
-    /* dot + icon row */
+    .event{position:relative;display:flex;flex-direction:column;align-items:center;width:150px;z-index:2;}
+
+    /* dot + icon on same horizontal row */
     .dotRow{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
 
-    .dot{width:20px;height:20px;background:#00BFFF;border-radius:50%;cursor:pointer;}
-    .dot.latest{width:28px;height:28px;background:#FFD700;box-shadow:0 0 12px rgba(255,215,0,.8);}
+    .dot{
+      width:20px;height:20px;border-radius:50%;
+      background:#00BFFF;cursor:pointer;
+    }
+    .dot.latest{
+      width:28px;height:28px;
+      background:#FFD700;
+      box-shadow:0 0 12px rgba(255,215,0,.8);
+    }
 
-    .icon{font-size:22px;line-height:20px;} /* align icon center vertically */
+    .icon{font-size:22px;line-height:20px;}
 
     .label{font-size:13px;text-align:center;line-height:1.35;}
 
     /* gold note box */
     .noteBox{
       position:absolute;
-      left:115%;               /* right of dot row */
+      left:115%;               /* to the right of dot row */
       top:50%;transform:translateY(-50%);
       background:#FFD700;color:#00253d;
       padding:2px 6px;border-radius:4px;
       font-size:11px;white-space:nowrap;
     }
-
-    #debugBox{margin-top:40px;color:#ffcc00;font-size:14px;}
   </style>
 </head>
 <body>
 
-  <div class="timeline-wrapper" id="timelineWrapper">
-    <div class="line" id="timelineLine"></div>
-    <div class="timeline-container" id="timelineContainer"></div>
+  <div class="timeline-wrapper" id="tw">
+    <div class="line" id="tline"></div>
+    <div class="timeline-container" id="tc"></div>
   </div>
 
-  <div id="debugBox"></div>
-
   <script>
-    const locationIcons={
-      "Pool":"🏊","Villa":"🏡","Beach":"🏖","Spa":"💆",
+    /* icons per location */
+    const icons={
+      "Pool":"🏊","Villa-304":"🏡","Beach":"🏖","Spa":"💆",
       "Restaurant":"🍽️","Reception":"🛎️","Jetty":"🚤",
       "Stargazing Deck":"🔭"
     };
 
-    /* convert “Friday, July 4, 2025, 11:45:00 AM” → Date */
-    function parseDate(v){
-      if(!v||typeof v!=='string') return new Date('1970-01-01');
-      return new Date(v.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
+    /* turn “Friday, July 4, 2025, 11:45:00 AM” → Date */
+    function toDate(s){
+      if(!s||typeof s!=='string') return new Date('1970-01-01');
+      return new Date(s.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
     }
 
-    /* mark ONLY the last dot of each ≥60-min Pool session */
-    function poolNoteIndexes(rows, tsIdx, locIdx){
-      const flags=new Array(rows.length).fill(false);
+    /* find last index of each Pool session ≥60 min */
+    function poolNoteIdx(rows,tsIdx,locIdx){
+      const flag=new Array(rows.length).fill(false);
       let i=0;
       while(i<rows.length){
-        if(rows[i][locIdx]!=="Pool"){i++;continue;}
+        if(rows[i][locIdx]!=='Pool'){i++;continue;}
         let start=i,end=i;
-        while(end+1<rows.length && rows[end+1][locIdx]==="Pool") end++;
-        const minutes=(parseDate(rows[end][tsIdx])-parseDate(rows[start][tsIdx]))/60000;
-        if(minutes>=60) flags[end]=true;        /* note at LAST dot only */
+        while(end+1<rows.length && rows[end+1][locIdx]==='Pool') end++;
+        const mins=(toDate(rows[end][tsIdx])-toDate(rows[start][tsIdx]))/60000;
+        if(mins>=60) flag[end]=true;    /* only last dot */
         i=end+1;
       }
-      return flags;
+      return flag;
     }
 
-    function renderTimeline(data){
-      const cnt=document.getElementById('timelineContainer');
-      const line=document.getElementById('timelineLine');
-      cnt.innerHTML='';
+    function buildTimeline(data){
+      const tc=document.getElementById('tc');
+      const line=document.getElementById('tline');
+      tc.innerHTML='';
 
-      const rows=data.rows||data.data||[];
-      if(!rows.length){cnt.innerHTML='<p>No events.</p>';return;}
+      const rows=data.data||data.rows||[];
+      if(rows.length===0){line.style.display='none';return;}
 
-      /* build column map by label then name */
-      const colIdx={}; data.columns.forEach((c,i)=>colIdx[(c.label||c.name||'').trim()]=i);
-      const tsIdx=colIdx[Object.keys(colIdx).find(k=>k.toLowerCase().includes('timestamp'))];
-      const locIdx=colIdx[Object.keys(colIdx).find(k=>k.toLowerCase().includes('location'))];
+      /* map columns by label then name */
+      const col={}, lab=l=>l.trim().toLowerCase();
+      data.columns.forEach((c,i)=>col[lab(c.label||c.name)]=i);
 
-      /* flags for drink note */
-      const noteFlag=poolNoteIndexes(rows,tsIdx,locIdx);
+      const tsIdx=col['timestamp'], locIdx=col['location'];
+      const noteIdx=poolNoteIdx(rows,tsIdx,locIdx);
 
-      /* latest event index */
-      let latestIdx=0,latest=parseDate(rows[0][tsIdx]);
-      rows.forEach((r,i)=>{const d=parseDate(r[tsIdx]);if(d>latest){latest=d;latestIdx=i;} });
+      /* latest */
+      let latest=0,latestDt=toDate(rows[0][tsIdx]);
+      rows.forEach((r,i)=>{const d=toDate(r[tsIdx]);if(d>latestDt){latest=i;latestDt=d;}});
 
       rows.forEach((r,i)=>{
-        const ts=r[tsIdx],loc=r[locIdx],icon=locationIcons[loc]||"📍";
+        const ts=r[tsIdx], loc=r[locIdx], icon=icons[loc]||'📍';
 
         const ev=document.createElement('div'); ev.className='event';
 
-        /* dot + icon on same row */
         const rowDiv=document.createElement('div'); rowDiv.className='dotRow';
-        const dot=document.createElement('div'); dot.className='dot'; if(i===latestIdx) dot.classList.add('latest');
+        const dot=document.createElement('div'); dot.className='dot'; if(i===latest) dot.classList.add('latest');
         dot.title=`${ts} – ${loc}`;
         dot.onclick=()=>va.messagingUtil.postSelectionMessage(data.resultName,[i]);
 
-        const ico=document.createElement('div'); ico.className='icon'; ico.textContent=icon;
-        rowDiv.append(dot,ico);
+        const ic=document.createElement('div'); ic.className='icon'; ic.textContent=icon;
+        rowDiv.append(dot,ic);
         ev.appendChild(rowDiv);
 
         const lbl=document.createElement('div'); lbl.className='label';
         lbl.innerHTML=`<strong>${ts}</strong><br>${loc}`;
         ev.appendChild(lbl);
 
-        /* add note box if flagged */
-        if(noteFlag[i]){
-          const note=document.createElement('div');
-          note.className='noteBox'; note.textContent='Complementary Drink Serving';
-          ev.appendChild(note);
+        if(noteIdx[i]){
+          const nb=document.createElement('div'); nb.className='noteBox';
+          nb.textContent='Complementary Drink Serving';
+          ev.appendChild(nb);
         }
-        cnt.appendChild(ev);
+        tc.appendChild(ev);
       });
 
-      requestAnimationFrame(()=>{
-        const evs=cnt.querySelectorAll('.event');
-        if(evs.length>1){
+      /* draw or hide line */
+      if(rows.length<=1){
+        line.style.display='none';
+      }else{
+        line.style.display='';
+        requestAnimationFrame(()=>{
+          const evs=tc.querySelectorAll('.event');
           const start=evs[0].offsetLeft+evs[0].offsetWidth/2;
           const end  =evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
           line.style.left=`${start}px`; line.style.width=`${end-start}px`;
-        }
-      });
+        });
+      }
     }
 
-    /* simple debug */
-    function dbg(m){document.getElementById('debugBox').innerText=m;}
-
-    va.messagingUtil.setOnDataReceivedCallback(d=>{
-      dbg(`rows ${ (d.rows||d.data||[]).length }`); renderTimeline(d);
-    });
+    /* connect to SAS VA */
+    va.messagingUtil.setOnDataReceivedCallback(data=>buildTimeline(data));
   </script>
 </body>
 </html>
