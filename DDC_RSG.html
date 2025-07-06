@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SAS VA Timeline DDC + Pool Drink Note</title>
+  <title>SAS VA Timeline DDC – Pool Note at Last Dot</title>
   <script src="messagingUtil.js"></script>
 
   <style>
@@ -10,12 +10,29 @@
     .timeline-wrapper{position:relative;width:fit-content;}
     .timeline-container{display:flex;align-items:center;gap:50px;position:relative;z-index:1;}
     .line{position:absolute;top:50%;transform:translateY(-50%);height:2px;background:#00BFFF;z-index:0;}
-    .event{display:flex;flex-direction:column;align-items:center;width:120px;z-index:2;}
-    .dot{width:20px;height:20px;background:#00BFFF;border-radius:50%;margin-bottom:10px;cursor:pointer;}
-    .dot.latest{width:28px;height:28px;background:#FFD700;box-shadow:0 0 12px rgba(255,215,0,.8);transform:scale(1.2);}
-    .label{font-size:13px;text-align:center;margin-top:5px;line-height:1.35;}
-    .icon{font-size:22px;margin-top:-5px;}
-    .note{font-size:11px;color:#FFD700;margin-top:2px;}   /* gold note */
+
+    .event{position:relative;display:flex;flex-direction:column;align-items:center;width:140px;z-index:2;}
+
+    /* dot + icon row */
+    .dotRow{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+
+    .dot{width:20px;height:20px;background:#00BFFF;border-radius:50%;cursor:pointer;}
+    .dot.latest{width:28px;height:28px;background:#FFD700;box-shadow:0 0 12px rgba(255,215,0,.8);}
+
+    .icon{font-size:22px;line-height:20px;} /* align icon center vertically */
+
+    .label{font-size:13px;text-align:center;line-height:1.35;}
+
+    /* gold note box */
+    .noteBox{
+      position:absolute;
+      left:115%;               /* right of dot row */
+      top:50%;transform:translateY(-50%);
+      background:#FFD700;color:#00253d;
+      padding:2px 6px;border-radius:4px;
+      font-size:11px;white-space:nowrap;
+    }
+
     #debugBox{margin-top:40px;color:#ffcc00;font-size:14px;}
   </style>
 </head>
@@ -35,85 +52,77 @@
       "Stargazing Deck":"🔭"
     };
 
-    /* Parse "Friday, July 4, 2025, 11:45:00 AM" */
+    /* convert “Friday, July 4, 2025, 11:45:00 AM” → Date */
     function parseDate(v){
       if(!v||typeof v!=='string') return new Date('1970-01-01');
-      const cleaned=v.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,'');
-      return new Date(cleaned);
+      return new Date(v.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
     }
 
-    /* Identify sessions of consecutive Pool rows lasting ≥60 min */
-    function markPoolSessions(rows, tsIdx, locIdx){
-      const noteFlags=new Array(rows.length).fill(false);
+    /* mark ONLY the last dot of each ≥60-min Pool session */
+    function poolNoteIndexes(rows, tsIdx, locIdx){
+      const flags=new Array(rows.length).fill(false);
       let i=0;
       while(i<rows.length){
-        if(rows[i][locIdx]!=="Pool"){ i++; continue; }
-
-        /* start of a pool session */
-        const start=i;
-        let end=i;
+        if(rows[i][locIdx]!=="Pool"){i++;continue;}
+        let start=i,end=i;
         while(end+1<rows.length && rows[end+1][locIdx]==="Pool") end++;
-
-        const startTime=parseDate(rows[start][tsIdx]);
-        const endTime  =parseDate(rows[end][tsIdx]);
-        const diffMin=(endTime-startTime)/60000;
-
-        if(diffMin>=60){
-          /* show note on EVERY dot within the session  */
-          // to show only on last dot: noteFlags[end]=true;
-          for(let k=start;k<=end;k++) noteFlags[k]=true;
-        }
+        const minutes=(parseDate(rows[end][tsIdx])-parseDate(rows[start][tsIdx]))/60000;
+        if(minutes>=60) flags[end]=true;        /* note at LAST dot only */
         i=end+1;
       }
-      return noteFlags;
+      return flags;
     }
 
     function renderTimeline(data){
-      const container=document.getElementById('timelineContainer');
+      const cnt=document.getElementById('timelineContainer');
       const line=document.getElementById('timelineLine');
-      container.innerHTML='';
+      cnt.innerHTML='';
 
       const rows=data.rows||data.data||[];
-      if(rows.length===0){container.innerHTML='<p>No events.</p>';return;}
+      if(!rows.length){cnt.innerHTML='<p>No events.</p>';return;}
 
-      const colIndex={};
-      data.columns.forEach((c,i)=>colIndex[(c.label||c.name||'').trim()]=i);
-      const tsKey=Object.keys(colIndex).find(k=>k.toLowerCase().includes('timestamp'));
-      const locKey=Object.keys(colIndex).find(k=>k.toLowerCase().includes('location'));
-      const tsIdx=colIndex[tsKey], locIdx=colIndex[locKey];
+      /* build column map by label then name */
+      const colIdx={}; data.columns.forEach((c,i)=>colIdx[(c.label||c.name||'').trim()]=i);
+      const tsIdx=colIdx[Object.keys(colIdx).find(k=>k.toLowerCase().includes('timestamp'))];
+      const locIdx=colIdx[Object.keys(colIdx).find(k=>k.toLowerCase().includes('location'))];
 
-      /* mark pool-drink dots */
-      const drinkNoteFlags=markPoolSessions(rows, tsIdx, locIdx);
+      /* flags for drink note */
+      const noteFlag=poolNoteIndexes(rows,tsIdx,locIdx);
 
-      /* latest */
-      let latestIdx=0, latest=parseDate(rows[0][tsIdx]);
-      rows.forEach((r,i)=>{const d=parseDate(r[tsIdx]);if(d>latest){latest=d;latestIdx=i;}});
+      /* latest event index */
+      let latestIdx=0,latest=parseDate(rows[0][tsIdx]);
+      rows.forEach((r,i)=>{const d=parseDate(r[tsIdx]);if(d>latest){latest=d;latestIdx=i;} });
 
       rows.forEach((r,i)=>{
-        const ts=r[tsIdx], loc=r[locIdx], icon=locationIcons[loc]||"📍";
+        const ts=r[tsIdx],loc=r[locIdx],icon=locationIcons[loc]||"📍";
 
         const ev=document.createElement('div'); ev.className='event';
-        const dot=document.createElement('div');
-        dot.className='dot'; if(i===latestIdx) dot.classList.add('latest');
-        dot.onclick=()=>va.messagingUtil.postSelectionMessage(data.resultName,[i]);
+
+        /* dot + icon on same row */
+        const rowDiv=document.createElement('div'); rowDiv.className='dotRow';
+        const dot=document.createElement('div'); dot.className='dot'; if(i===latestIdx) dot.classList.add('latest');
         dot.title=`${ts} – ${loc}`;
+        dot.onclick=()=>va.messagingUtil.postSelectionMessage(data.resultName,[i]);
 
         const ico=document.createElement('div'); ico.className='icon'; ico.textContent=icon;
+        rowDiv.append(dot,ico);
+        ev.appendChild(rowDiv);
+
         const lbl=document.createElement('div'); lbl.className='label';
         lbl.innerHTML=`<strong>${ts}</strong><br>${loc}`;
+        ev.appendChild(lbl);
 
-        ev.append(dot,ico,lbl);
-
-        if(drinkNoteFlags[i]){
+        /* add note box if flagged */
+        if(noteFlag[i]){
           const note=document.createElement('div');
-          note.className='note'; note.textContent='Complementary Drink Serving';
+          note.className='noteBox'; note.textContent='Complementary Drink Serving';
           ev.appendChild(note);
         }
-        container.appendChild(ev);
+        cnt.appendChild(ev);
       });
 
       requestAnimationFrame(()=>{
-        const evs=container.querySelectorAll('.event');
+        const evs=cnt.querySelectorAll('.event');
         if(evs.length>1){
           const start=evs[0].offsetLeft+evs[0].offsetWidth/2;
           const end  =evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
@@ -122,12 +131,11 @@
       });
     }
 
-    /* Debug helper */
+    /* simple debug */
     function dbg(m){document.getElementById('debugBox').innerText=m;}
 
     va.messagingUtil.setOnDataReceivedCallback(d=>{
-      dbg(`rows ${ (d.rows||d.data||[]).length }`);
-      renderTimeline(d);
+      dbg(`rows ${ (d.rows||d.data||[]).length }`); renderTimeline(d);
     });
   </script>
 </body>
