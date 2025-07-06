@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SAS VA Timeline DDC</title>
+  <title>SAS VA Timeline DDC + Pool Drink Note</title>
   <script src="messagingUtil.js"></script>
 
   <style>
@@ -13,8 +13,9 @@
     .event{display:flex;flex-direction:column;align-items:center;width:120px;z-index:2;}
     .dot{width:20px;height:20px;background:#00BFFF;border-radius:50%;margin-bottom:10px;cursor:pointer;}
     .dot.latest{width:28px;height:28px;background:#FFD700;box-shadow:0 0 12px rgba(255,215,0,.8);transform:scale(1.2);}
-    .label{font-size:13px;text-align:center;margin-top:5px;line-height:1.4;}
+    .label{font-size:13px;text-align:center;margin-top:5px;line-height:1.35;}
     .icon{font-size:22px;margin-top:-5px;}
+    .note{font-size:11px;color:#FFD700;margin-top:2px;}   /* gold note */
     #debugBox{margin-top:40px;color:#ffcc00;font-size:14px;}
   </style>
 </head>
@@ -29,8 +30,9 @@
 
   <script>
     const locationIcons={
-      "Pool":"🏊","Villa":"🏡","Beach":"🏖","Spa":"💆","Restaurant":"🍽️","Reception":"🛎️",
-      "Jetty":"🚤","Stargazing Deck":"🔭"
+      "Pool":"🏊","Villa":"🏡","Beach":"🏖","Spa":"💆",
+      "Restaurant":"🍽️","Reception":"🛎️","Jetty":"🚤",
+      "Stargazing Deck":"🔭"
     };
 
     /* Parse "Friday, July 4, 2025, 11:45:00 AM" */
@@ -40,78 +42,93 @@
       return new Date(cleaned);
     }
 
+    /* Identify sessions of consecutive Pool rows lasting ≥60 min */
+    function markPoolSessions(rows, tsIdx, locIdx){
+      const noteFlags=new Array(rows.length).fill(false);
+      let i=0;
+      while(i<rows.length){
+        if(rows[i][locIdx]!=="Pool"){ i++; continue; }
+
+        /* start of a pool session */
+        const start=i;
+        let end=i;
+        while(end+1<rows.length && rows[end+1][locIdx]==="Pool") end++;
+
+        const startTime=parseDate(rows[start][tsIdx]);
+        const endTime  =parseDate(rows[end][tsIdx]);
+        const diffMin=(endTime-startTime)/60000;
+
+        if(diffMin>=60){
+          /* show note on EVERY dot within the session  */
+          // to show only on last dot: noteFlags[end]=true;
+          for(let k=start;k<=end;k++) noteFlags[k]=true;
+        }
+        i=end+1;
+      }
+      return noteFlags;
+    }
+
     function renderTimeline(data){
       const container=document.getElementById('timelineContainer');
       const line=document.getElementById('timelineLine');
       container.innerHTML='';
 
-      /* rows may come as data.rows OR data.data */
-      const rows = data.rows || data.data || [];
-      if(rows.length===0){
-        container.innerHTML='<p>No events to display.</p>';
-        return;
-      }
+      const rows=data.rows||data.data||[];
+      if(rows.length===0){container.innerHTML='<p>No events.</p>';return;}
 
-      /* build lookup by LABEL first, fallback NAME */
       const colIndex={};
-      data.columns.forEach((col,i)=>{
-        const key=(col.label||col.name||'').trim();
-        colIndex[key]=i;
-      });
+      data.columns.forEach((c,i)=>colIndex[(c.label||c.name||'').trim()]=i);
+      const tsKey=Object.keys(colIndex).find(k=>k.toLowerCase().includes('timestamp'));
+      const locKey=Object.keys(colIndex).find(k=>k.toLowerCase().includes('location'));
+      const tsIdx=colIndex[tsKey], locIdx=colIndex[locKey];
 
-      const tsKey = Object.keys(colIndex).find(k=>k.toLowerCase().includes('timestamp')) || rows[0];
-      const locKey= Object.keys(colIndex).find(k=>k.toLowerCase().includes('location'))  || rows[1];
+      /* mark pool-drink dots */
+      const drinkNoteFlags=markPoolSessions(rows, tsIdx, locIdx);
 
-      /* find latest */
-      let latestIdx=0, latestDate=parseDate(rows[0][colIndex[tsKey]]);
+      /* latest */
+      let latestIdx=0, latest=parseDate(rows[0][tsIdx]);
+      rows.forEach((r,i)=>{const d=parseDate(r[tsIdx]);if(d>latest){latest=d;latestIdx=i;}});
+
       rows.forEach((r,i)=>{
-        const d=parseDate(r[colIndex[tsKey]]);
-        if(d>latestDate){ latestDate=d; latestIdx=i; }
-      });
-
-      /* draw dots */
-      rows.forEach((r,i)=>{
-        const ts = r[colIndex[tsKey]];
-        const loc= r[colIndex[locKey]];
-        const icon=locationIcons[loc]||"📍";
+        const ts=r[tsIdx], loc=r[locIdx], icon=locationIcons[loc]||"📍";
 
         const ev=document.createElement('div'); ev.className='event';
-
         const dot=document.createElement('div');
         dot.className='dot'; if(i===latestIdx) dot.classList.add('latest');
-        dot.title=`${ts} – ${loc}`;
         dot.onclick=()=>va.messagingUtil.postSelectionMessage(data.resultName,[i]);
+        dot.title=`${ts} – ${loc}`;
 
-        const emoji=document.createElement('div'); emoji.className='icon'; emoji.textContent=icon;
-        const label=document.createElement('div'); label.className='label';
-        label.innerHTML=`<strong>${ts}</strong><br>${loc}`;
+        const ico=document.createElement('div'); ico.className='icon'; ico.textContent=icon;
+        const lbl=document.createElement('div'); lbl.className='label';
+        lbl.innerHTML=`<strong>${ts}</strong><br>${loc}`;
 
-        ev.append(dot,emoji,label); container.appendChild(ev);
+        ev.append(dot,ico,lbl);
+
+        if(drinkNoteFlags[i]){
+          const note=document.createElement('div');
+          note.className='note'; note.textContent='Complementary Drink Serving';
+          ev.appendChild(note);
+        }
+        container.appendChild(ev);
       });
 
       requestAnimationFrame(()=>{
-        const ev=container.querySelectorAll('.event');
-        if(ev.length>1){
-          const start=ev[0].offsetLeft+ev[0].offsetWidth/2;
-          const end  =ev[ev.length-1].offsetLeft+ev[ev.length-1].offsetWidth/2;
+        const evs=container.querySelectorAll('.event');
+        if(evs.length>1){
+          const start=evs[0].offsetLeft+evs[0].offsetWidth/2;
+          const end  =evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
           line.style.left=`${start}px`; line.style.width=`${end-start}px`;
         }
       });
     }
 
-    /* minimal visual debug */
+    /* Debug helper */
     function dbg(m){document.getElementById('debugBox').innerText=m;}
 
-    /* receive via SAS helper; also log raw event as fallback */
-    window.addEventListener('message',e=>{
-      if(!(window.va&&va.messagingUtil)) dbg('⚠️ messagingUtil unavailable');
-    });
-
     va.messagingUtil.setOnDataReceivedCallback(d=>{
-      dbg(`✅ rows received: ${(d.rows||d.data||[]).length}`);
+      dbg(`rows ${ (d.rows||d.data||[]).length }`);
       renderTimeline(d);
     });
   </script>
-
 </body>
 </html>
