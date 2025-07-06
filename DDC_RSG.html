@@ -17,7 +17,7 @@
     .timeline-wrapper{position:relative;width:fit-content;}
     .timeline-container{display:flex;align-items:center;gap:50px;position:relative;z-index:1;}
 
-    /* blue connector line */
+    /* blue connector line (hidden if one event) */
     .line{
       position:absolute;
       top:50%;transform:translateY(-50%);
@@ -30,12 +30,12 @@
       width:150px;z-index:2;
     }
 
-    /* ICON ONLY – same horizontal row baseline */
+    /* icon row (icon only – no dots) */
     .iconRow{display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
 
     .icon{
       font-size:24px;line-height:24px;cursor:pointer;
-      filter:drop-shadow(0 0 2px #00BFFF);           /* faint glow like dot */
+      filter:drop-shadow(0 0 2px #00BFFF);
     }
     .icon.latest{
       font-size:32px;
@@ -44,16 +44,16 @@
 
     .label{font-size:13px;text-align:center;line-height:1.35;}
 
-    /* gold note box */
+    /* gold note box – adjusted position */
     .noteBox{
       position:absolute;
-      left:calc(100% + 10px);      /* clear of gap → no overlap */
-      top:50%;transform:translateY(-50%);
+      left:calc(100% + 4px); /* 4 px right of icon */
+      top:45%;               /* slightly above vertical centre */
+      transform:translateY(-50%);
       background:#FFD700;color:#00253d;
       padding:2px 6px;border-radius:4px;
       font-size:11px;text-align:center;
-      white-space:nowrap;
-      line-height:1.15;
+      white-space:nowrap;line-height:1.15;
     }
   </style>
 </head>
@@ -65,66 +65,68 @@
   </div>
 
   <script>
-    /* mapping of location → emoji */
+    /* location → emoji */
     const ICONS={
       "Pool":"🏊","Villa":"🏡","Beach":"🏖","Spa":"💆",
       "Restaurant":"🍽️","Reception":"🛎️","Jetty":"🚤",
       "Stargazing Deck":"🔭"
     };
 
-    /* "Friday, July 4, 2025, 11:45:00 AM" → Date */
+    /* parse "Friday, July 4, 2025, 11:45:00 AM" */
     const toDate=s=>new Date(s.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
 
-    /* return Boolean[] where true = last Pool icon in a ≥60-min session */
+    /* mark last Pool row of ≥60-min session */
     function poolFlags(rows,ts,loc){
-      const flag=new Array(rows.length).fill(false);
-      let i=0; while(i<rows.length){
+      const f=new Array(rows.length).fill(false);
+      let i=0;
+      while(i<rows.length){
         if(rows[i][loc]!=='Pool'){i++;continue;}
         let start=i,end=i;
-        while(end+1<rows.length&&rows[end+1][loc]==='Pool') end++;
+        while(end+1<rows.length && rows[end+1][loc]==='Pool') end++;
         const mins=(toDate(rows[end][ts])-toDate(rows[start][ts]))/60000;
-        if(mins>=60) flag[end]=true;      /* mark last only */
+        if(mins>=60) f[end]=true;          /* only last icon */
         i=end+1;
       }
-      return flag;
+      return f;
     }
 
     function render(d){
-      const tc=document.getElementById('tc'), line=document.getElementById('tline');
+      const tc=document.getElementById('tc');
+      const line=document.getElementById('tline');
       tc.innerHTML='';
 
       const rows=d.data||d.rows||[];
       if(!rows.length){line.style.display='none';return;}
 
-      /* map column labels → index */
-      const map={}; d.columns.forEach((c,i)=>map[(c.label||c.name).trim().toLowerCase()]=i);
-      const tsIdx=map['timestamp'], locIdx=map['location'];
+      /* column lookup */
+      const idx={}; d.columns.forEach((c,i)=>idx[(c.label||c.name).trim().toLowerCase()]=i);
+      const tsI=idx['timestamp'], locI=idx['location'];
 
-      const poolNote=poolFlags(rows,tsIdx,locIdx);
+      const note=poolFlags(rows,tsI,locI);
 
       /* latest */
-      let latest=0, latestDate=toDate(rows[0][tsIdx]);
-      rows.forEach((r,i)=>{const d=toDate(r[tsIdx]); if(d>latestDate){latest=i;latestDate=d;} });
+      let latest=0,latestDt=toDate(rows[0][tsI]);
+      rows.forEach((r,i)=>{const t=toDate(r[tsI]); if(t>latestDt){latest=i;latestDt=t;} });
 
       rows.forEach((r,i)=>{
-        const ts=r[tsIdx], loc=r[locIdx], iconChar=ICONS[loc]||'📍';
+        const ts=r[tsI], loc=r[locI], icn=ICONS[loc]||'📍';
 
         const ev=document.createElement('div'); ev.className='event';
 
         const row=document.createElement('div'); row.className='iconRow';
-        const ic=document.createElement('div');
-        ic.className='icon'; if(i===latest) ic.classList.add('latest');
-        ic.textContent=iconChar;
-        ic.title=`${ts} – ${loc}`;
-        ic.onclick=()=>va.messagingUtil.postSelectionMessage(d.resultName,[i]);
-        row.appendChild(ic);
+        const icon=document.createElement('div');
+        icon.className='icon'; if(i===latest) icon.classList.add('latest');
+        icon.textContent=icn;
+        icon.title=`${ts} – ${loc}`;
+        icon.onclick=()=>va.messagingUtil.postSelectionMessage(d.resultName,[i]);
+        row.appendChild(icon);
         ev.appendChild(row);
 
         const lbl=document.createElement('div'); lbl.className='label';
         lbl.innerHTML=`<strong>${ts}</strong><br>${loc}`;
         ev.appendChild(lbl);
 
-        if(poolNote[i]){
+        if(note[i]){
           const nb=document.createElement('div'); nb.className='noteBox';
           nb.innerHTML='Complementary<br>Drink&nbsp;Served';
           ev.appendChild(nb);
@@ -132,7 +134,7 @@
         tc.appendChild(ev);
       });
 
-      /* draw / hide line */
+      /* show / hide connector */
       if(rows.length<=1){
         line.style.display='none';
       }else{
@@ -141,11 +143,13 @@
           const evs=tc.querySelectorAll('.event');
           const start=evs[0].offsetLeft+evs[0].offsetWidth/2;
           const end  =evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
-          line.style.left=`${start}px`; line.style.width=`${end-start}px`;
+          line.style.left=`${start}px`;
+          line.style.width=`${end-start}px`;
         });
       }
     }
 
+    /* SAS VA hookup */
     va.messagingUtil.setOnDataReceivedCallback(render);
   </script>
 </body>
