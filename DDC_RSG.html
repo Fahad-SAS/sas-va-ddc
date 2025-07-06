@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SAS VA Timeline DDC – Pool Note</title>
+  <title>SAS VA Timeline DDC – Icons & Pool Note</title>
   <script src="messagingUtil.js"></script>
 
   <style>
@@ -17,125 +17,122 @@
     .timeline-wrapper{position:relative;width:fit-content;}
     .timeline-container{display:flex;align-items:center;gap:50px;position:relative;z-index:1;}
 
-    /* blue line */
+    /* blue connector line */
     .line{
       position:absolute;
       top:50%;transform:translateY(-50%);
       height:2px;background:#00BFFF;z-index:0;
     }
 
-    .event{position:relative;display:flex;flex-direction:column;align-items:center;width:150px;z-index:2;}
-
-    /* dot + icon on same horizontal row */
-    .dotRow{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
-
-    .dot{
-      width:20px;height:20px;border-radius:50%;
-      background:#00BFFF;cursor:pointer;
-    }
-    .dot.latest{
-      width:28px;height:28px;
-      background:#FFD700;
-      box-shadow:0 0 12px rgba(255,215,0,.8);
+    .event{
+      position:relative;
+      display:flex;flex-direction:column;align-items:center;
+      width:150px;z-index:2;
     }
 
-    .icon{font-size:22px;line-height:20px;}
+    /* ICON ONLY – same horizontal row baseline */
+    .iconRow{display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
+
+    .icon{
+      font-size:24px;line-height:24px;cursor:pointer;
+      filter:drop-shadow(0 0 2px #00BFFF);           /* faint glow like dot */
+    }
+    .icon.latest{
+      font-size:32px;
+      filter:drop-shadow(0 0 4px #FFD700);
+    }
 
     .label{font-size:13px;text-align:center;line-height:1.35;}
 
     /* gold note box */
     .noteBox{
       position:absolute;
-      left:115%;               /* to the right of dot row */
+      left:calc(100% + 10px);      /* clear of gap → no overlap */
       top:50%;transform:translateY(-50%);
       background:#FFD700;color:#00253d;
       padding:2px 6px;border-radius:4px;
-      font-size:11px;white-space:nowrap;
+      font-size:11px;text-align:center;
+      white-space:nowrap;
+      line-height:1.15;
     }
   </style>
 </head>
 <body>
 
-  <div class="timeline-wrapper" id="tw">
+  <div class="timeline-wrapper">
     <div class="line" id="tline"></div>
     <div class="timeline-container" id="tc"></div>
   </div>
 
   <script>
-    /* icons per location */
-    const icons={
-      "Pool":"🏊","Villa-304":"🏡","Beach":"🏖","Spa":"💆",
+    /* mapping of location → emoji */
+    const ICONS={
+      "Pool":"🏊","Villa":"🏡","Beach":"🏖","Spa":"💆",
       "Restaurant":"🍽️","Reception":"🛎️","Jetty":"🚤",
       "Stargazing Deck":"🔭"
     };
 
-    /* turn “Friday, July 4, 2025, 11:45:00 AM” → Date */
-    function toDate(s){
-      if(!s||typeof s!=='string') return new Date('1970-01-01');
-      return new Date(s.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
-    }
+    /* "Friday, July 4, 2025, 11:45:00 AM" → Date */
+    const toDate=s=>new Date(s.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
 
-    /* find last index of each Pool session ≥60 min */
-    function poolNoteIdx(rows,tsIdx,locIdx){
+    /* return Boolean[] where true = last Pool icon in a ≥60-min session */
+    function poolFlags(rows,ts,loc){
       const flag=new Array(rows.length).fill(false);
-      let i=0;
-      while(i<rows.length){
-        if(rows[i][locIdx]!=='Pool'){i++;continue;}
+      let i=0; while(i<rows.length){
+        if(rows[i][loc]!=='Pool'){i++;continue;}
         let start=i,end=i;
-        while(end+1<rows.length && rows[end+1][locIdx]==='Pool') end++;
-        const mins=(toDate(rows[end][tsIdx])-toDate(rows[start][tsIdx]))/60000;
-        if(mins>=60) flag[end]=true;    /* only last dot */
+        while(end+1<rows.length&&rows[end+1][loc]==='Pool') end++;
+        const mins=(toDate(rows[end][ts])-toDate(rows[start][ts]))/60000;
+        if(mins>=60) flag[end]=true;      /* mark last only */
         i=end+1;
       }
       return flag;
     }
 
-    function buildTimeline(data){
-      const tc=document.getElementById('tc');
-      const line=document.getElementById('tline');
+    function render(d){
+      const tc=document.getElementById('tc'), line=document.getElementById('tline');
       tc.innerHTML='';
 
-      const rows=data.data||data.rows||[];
-      if(rows.length===0){line.style.display='none';return;}
+      const rows=d.data||d.rows||[];
+      if(!rows.length){line.style.display='none';return;}
 
-      /* map columns by label then name */
-      const col={}, lab=l=>l.trim().toLowerCase();
-      data.columns.forEach((c,i)=>col[lab(c.label||c.name)]=i);
+      /* map column labels → index */
+      const map={}; d.columns.forEach((c,i)=>map[(c.label||c.name).trim().toLowerCase()]=i);
+      const tsIdx=map['timestamp'], locIdx=map['location'];
 
-      const tsIdx=col['timestamp'], locIdx=col['location'];
-      const noteIdx=poolNoteIdx(rows,tsIdx,locIdx);
+      const poolNote=poolFlags(rows,tsIdx,locIdx);
 
       /* latest */
-      let latest=0,latestDt=toDate(rows[0][tsIdx]);
-      rows.forEach((r,i)=>{const d=toDate(r[tsIdx]);if(d>latestDt){latest=i;latestDt=d;}});
+      let latest=0, latestDate=toDate(rows[0][tsIdx]);
+      rows.forEach((r,i)=>{const d=toDate(r[tsIdx]); if(d>latestDate){latest=i;latestDate=d;} });
 
       rows.forEach((r,i)=>{
-        const ts=r[tsIdx], loc=r[locIdx], icon=icons[loc]||'📍';
+        const ts=r[tsIdx], loc=r[locIdx], iconChar=ICONS[loc]||'📍';
 
         const ev=document.createElement('div'); ev.className='event';
 
-        const rowDiv=document.createElement('div'); rowDiv.className='dotRow';
-        const dot=document.createElement('div'); dot.className='dot'; if(i===latest) dot.classList.add('latest');
-        dot.title=`${ts} – ${loc}`;
-        dot.onclick=()=>va.messagingUtil.postSelectionMessage(data.resultName,[i]);
-
-        const ic=document.createElement('div'); ic.className='icon'; ic.textContent=icon;
-        rowDiv.append(dot,ic);
-        ev.appendChild(rowDiv);
+        const row=document.createElement('div'); row.className='iconRow';
+        const ic=document.createElement('div');
+        ic.className='icon'; if(i===latest) ic.classList.add('latest');
+        ic.textContent=iconChar;
+        ic.title=`${ts} – ${loc}`;
+        ic.onclick=()=>va.messagingUtil.postSelectionMessage(d.resultName,[i]);
+        row.appendChild(ic);
+        ev.appendChild(row);
 
         const lbl=document.createElement('div'); lbl.className='label';
         lbl.innerHTML=`<strong>${ts}</strong><br>${loc}`;
         ev.appendChild(lbl);
 
-        if(noteIdx[i]){
+        if(poolNote[i]){
           const nb=document.createElement('div'); nb.className='noteBox';
-          nb.textContent='Complementary Drink Serving';
+          nb.innerHTML='Complementary<br>Drink&nbsp;Served';
           ev.appendChild(nb);
         }
         tc.appendChild(ev);
       });
 
-      /* draw or hide line */
+      /* draw / hide line */
       if(rows.length<=1){
         line.style.display='none';
       }else{
@@ -149,8 +146,7 @@
       }
     }
 
-    /* connect to SAS VA */
-    va.messagingUtil.setOnDataReceivedCallback(data=>buildTimeline(data));
+    va.messagingUtil.setOnDataReceivedCallback(render);
   </script>
 </body>
 </html>
