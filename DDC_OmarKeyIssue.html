@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Guest Key-Issue Timeline (Omar)</title>
+  <script src="messagingUtil.js"></script>
+
+  <style>
+    body{
+      font-family:Arial, sans-serif;
+      padding:40px;
+      background:#00253d;
+      color:#fff;
+      overflow-x:auto;
+    }
+
+    .wrapper{position:relative;width:fit-content;}
+    .container{display:flex;align-items:center;gap:50px;position:relative;z-index:1;}
+
+    .line{
+      position:absolute;
+      top:50%;transform:translateY(-50%);
+      height:2px;background:#00BFFF;z-index:0;
+    }
+
+    .event{
+      position:relative;
+      display:flex;flex-direction:column;align-items:center;
+      width:160px;z-index:2;
+    }
+
+    .iconRow{display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
+
+    .icon{
+      font-size:24px;line-height:24px;cursor:pointer;
+      filter:drop-shadow(0 0 2px #00BFFF);
+    }
+    .icon.latest{
+      font-size:32px;
+      filter:drop-shadow(0 0 4px #FFD700);
+    }
+
+    .label{
+      font-size:12px;text-align:center;line-height:1.3;
+      white-space:normal;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="wrapper">
+    <div class="line" id="tline"></div>
+    <div class="container" id="tc"></div>
+  </div>
+
+  <script>
+    /* keyword → icon */
+    const ICONS=[
+      {match:/check-?in/i,             ico:'🛎️'},
+      {match:/unlock/i,                ico:'🔑'},
+      {match:/maintenance\s+arrived/i, ico:'🔧'},
+      {match:/push\s+message/i,        ico:'💬'}
+    ];
+
+    /* helper: map event text → emoji */
+    function eventIcon(text){
+      for(const m of ICONS) if(m.match.test(text)) return m.ico;
+      return '📍';
+    }
+
+    /* parse SAS DATETIME40 string */
+    const toDate=s=>new Date(s.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
+
+    function render(d){
+      const tc=document.getElementById('tc'), line=document.getElementById('tline');
+      tc.innerHTML='';
+
+      const rows=d.data||d.rows||[];
+      if(!rows.length){line.style.display='none';return;}
+
+      /* map columns by label lower-case */
+      const idx={}; d.columns.forEach((c,i)=>idx[(c.label||c.name).trim().toLowerCase()]=i);
+      const tsI = idx['timestamp'], locI = idx['location'], evtI = idx['guesteventtype'];
+
+      /* determine latest */
+      let latest=0, latestDt=toDate(rows[0][tsI]);
+      rows.forEach((r,i)=>{const t=toDate(r[tsI]); if(t>latestDt){latest=i;latestDt=t;} });
+
+      rows.forEach((r,i)=>{
+        const ts = r[tsI], loc=r[locI], evt=r[evtI]||'';
+        const ico=eventIcon(evt);
+
+        const ev=document.createElement('div'); ev.className='event';
+
+        const ir=document.createElement('div'); ir.className='iconRow';
+        const ic=document.createElement('div');
+        ic.className='icon'; if(i===latest) ic.classList.add('latest');
+        ic.textContent=ico;
+        ic.title=`${ts} – ${evt} @ ${loc}`;
+        ir.appendChild(ic);
+        ev.appendChild(ir);
+
+        /* three-line label */
+        const lbl=document.createElement('div'); lbl.className='label';
+        lbl.innerHTML=`<strong>${ts}</strong><br>${loc}<br>${evt}`;
+        ev.appendChild(lbl);
+
+        tc.appendChild(ev);
+      });
+
+      /* draw blue connector only if >1 event */
+      if(rows.length<=1){
+        line.style.display='none';
+      }else{
+        line.style.display='';
+        requestAnimationFrame(()=>{
+          const evs=tc.querySelectorAll('.event');
+          const start=evs[0].offsetLeft+evs[0].offsetWidth/2;
+          const end  =evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
+          line.style.left=`${start}px`;
+          line.style.width=`${end-start}px`;
+        });
+      }
+    }
+
+    /* hook into SAS VA */
+    va.messagingUtil.setOnDataReceivedCallback(render);
+  </script>
+</body>
+</html>
