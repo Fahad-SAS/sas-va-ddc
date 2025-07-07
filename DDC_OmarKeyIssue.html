@@ -2,30 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Guest Key-Issue Timeline – Action Boxes</title>
+  <title>Guest Key-Issue Timeline – Action Boxes & Restaurant</title>
   <script src="messagingUtil.js"></script>
 
   <style>
     body{font-family:Arial, sans-serif;padding:40px;background:#00253d;color:#fff;overflow-x:auto;}
-
     .wrap{position:relative;width:fit-content;}
     .cont{display:flex;align-items:center;gap:50px;position:relative;z-index:1;}
-
     .line{position:absolute;top:50%;transform:translateY(-50%);height:2px;background:#00BFFF;z-index:0;}
 
     .event{position:relative;display:flex;flex-direction:column;align-items:center;width:160px;z-index:2;}
-
     .iconRow{display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
     .icon{font-size:24px;line-height:24px;cursor:pointer;filter:drop-shadow(0 0 2px #00BFFF);}
     .icon.latest{font-size:32px;filter:drop-shadow(0 0 4px #FFD700);}
+    .label{font-size:12px;text-align:center;line-height:1.3;}
 
-    .label{font-size:12px;text-align:center;line-height:1.3;white-space:normal;}
-
-    /* action/maintenance box */
     .actionBox{
       position:absolute;left:50%;top:-38px;transform:translateX(-50%);
-      background:#90EE90;color:#00253d;font-size:11px;text-align:center;
-      padding:2px 6px;border-radius:4px;line-height:1.15;white-space:nowrap;
+      background:#90EE90;color:#00253d;padding:2px 6px;border-radius:4px;
+      font-size:11px;text-align:center;line-height:1.15;white-space:nowrap;
       filter:drop-shadow(0 0 2px #193);
     }
   </style>
@@ -38,85 +33,74 @@
   </div>
 
   <script>
-    /* icon mapping */
-    const ICONS=[
-      {re:/check-?in/i,             ico:'🛎️'},
-      {re:/unlock/i,                ico:'🔑'},
-      {re:/maintenance\s+arrived/i, ico:'🔧'}
-    ];
-    const iconFor=txt=>{
-      for(const m of ICONS) if(m.re.test(txt)) return m.ico;
+    /* pick icon from event or location */
+    function chooseIcon(evt, loc){
+      evt = evt || '';
+      loc = loc || '';
+
+      if(/check-?in/i.test(evt))                 return '🛎️';
+      if(/unlock/i.test(evt))                    return '🔑';
+      if(/maintenance\s+arrived/i.test(evt))     return '🔧';
+      if(/resturant|restaurant/i.test(loc))      return '🍽️';   /* NEW */
       return '📍';
-    };
+    }
 
-    /* date parser */
-    const toDate=s=>new Date(s.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
+    /* convert SAS DATETIME40 string to JS Date */
+    const toDate = s => new Date(s.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
 
-    /* main render */
     va.messagingUtil.setOnDataReceivedCallback(data=>{
-      const tc=document.getElementById('tc'), line=document.getElementById('tline');
+      const tc   = document.getElementById('tc');
+      const line = document.getElementById('tline');
       tc.innerHTML='';
 
-      const rows=data.data||data.rows||[];
+      const rows = data.data || data.rows || [];
       if(!rows.length){line.style.display='none';return;}
 
-      /* column indexes */
-      const idx={}; data.columns.forEach((c,i)=>idx[(c.label||c.name).trim().toLowerCase()]=i);
-      const tsI=idx['timestamp'], locI=idx['location'], evtI=idx['guesteventtype'];
+      /* locate column indexes by label (lower-case) */
+      const col={};
+      data.columns.forEach((c,i)=>col[(c.label||c.name).trim().toLowerCase()]=i);
+      const tI=col['timestamp'], lI=col['location'], eI=col['guesteventtype'];
 
-      /* Pass 1 – build displayRows & attach action boxes */
-      const disp=[];           // rows we will actually draw
-      const actionForRow={};   // rowIndex => action text
+      /* latest displayed row */
+      let latest=0, latestDt=toDate(rows[0][tI]);
+      rows.forEach((r,i)=>{const d=toDate(r[tI]); if(d>latestDt){latest=i;latestDt=d;} });
 
       rows.forEach((r,i)=>{
-        const evt=r[evtI]||'';
-        if(/push\s+message/i.test(evt)){
-          /* for this demo: always attach “Send Maintenance” to previous row */
-          if(disp.length) actionForRow[disp.length-1]='Send<br>Maintenance';
-          /* skip adding a separate icon for push-message */
-        }else{
-          disp.push(r);
-        }
-      });
+        const ts  = r[tI];
+        const loc = r[lI];
+        const evt = r[eI] || '';
 
-      /* latest among displayed rows */
-      let latest=0,latestDt=toDate(disp[0][tsI]);
-      disp.forEach((r,i)=>{const d=toDate(r[tsI]);if(d>latestDt){latest=i;latestDt=d;} });
+        const ev = document.createElement('div'); ev.className='event';
 
-      /* build DOM */
-      disp.forEach((r,i)=>{
-        const ts=r[tsI], loc=r[locI], evt=r[evtI]||'';
-        const ico=iconFor(evt);
+        /* icon */
+        const ir  = document.createElement('div'); ir.className='iconRow';
+        const ico = document.createElement('div');
+        ico.className='icon'; if(i===latest) ico.classList.add('latest');
+        ico.textContent = chooseIcon(evt, loc);
+        ico.title = `${ts} – ${evt || 'No event'} @ ${loc}`;
+        ir.appendChild(ico); ev.appendChild(ir);
 
-        const ev=document.createElement('div'); ev.className='event';
-
-        /* icon row */
-        const ir=document.createElement('div'); ir.className='iconRow';
-        const ic=document.createElement('div'); ic.className='icon'; if(i===latest) ic.classList.add('latest');
-        ic.textContent=ico; ic.title=`${ts} – ${evt} @ ${loc}`;
-        ir.appendChild(ic); ev.appendChild(ir);
-
-        const lbl=document.createElement('div'); lbl.className='label';
-        lbl.innerHTML=`<strong>${ts}</strong><br>${loc}<br>${evt}`;
+        /* 3-line label */
+        const lbl = document.createElement('div'); lbl.className='label';
+        lbl.innerHTML = `<strong>${ts}</strong><br>${loc}<br>${evt}`;
         ev.appendChild(lbl);
 
-        /* action box */
-        if(actionForRow[i]){
+        /* show green box on “Unlock Attempt – fail #2” */
+        if(/unlock\s+attempt.*fail\s*#?2/i.test(evt)){
           const ab=document.createElement('div'); ab.className='actionBox';
-          ab.innerHTML=actionForRow[i];
+          ab.textContent='Send Maintenance';
           ev.appendChild(ab);
         }
-
         tc.appendChild(ev);
       });
 
-      /* connector line */
-      if(disp.length<=1){
+      /* show connector line only when >1 event */
+      if(rows.length<=1){
         line.style.display='none';
       }else{
         line.style.display='';
         requestAnimationFrame(()=>{
-          const evs=tc.querySelectorAll('.event');
+          const evs=document.querySelectorAll('.event');
           const s=evs[0].offsetLeft+evs[0].offsetWidth/2;
           const e=evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
           line.style.left=`${s}px`; line.style.width=`${e-s}px`;
