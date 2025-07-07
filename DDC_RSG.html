@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SAS VA Timeline DDC – Icons & Pool Note</title>
+  <title>SAS VA Timeline DDC – Pool Note Above Icon</title>
   <script src="messagingUtil.js"></script>
 
   <style>
@@ -17,7 +17,7 @@
     .timeline-wrapper{position:relative;width:fit-content;}
     .timeline-container{display:flex;align-items:center;gap:50px;position:relative;z-index:1;}
 
-    /* blue connector */
+    /* blue connector – hidden if only one event */
     .line{
       position:absolute;
       top:50%;transform:translateY(-50%);
@@ -25,7 +25,7 @@
     }
 
     .event{
-      position:relative;
+      position:relative;               /* reference for noteBox */
       display:flex;flex-direction:column;align-items:center;
       width:150px;z-index:2;
     }
@@ -44,11 +44,12 @@
 
     .label{font-size:13px;text-align:center;line-height:1.35;}
 
-    /* gold note box – raised 12 px & 4 px away */
+    /* gold note box – centered above icon */
     .noteBox{
       position:absolute;
-      left:calc(100% + 1px);   /* 4 px right of icon */
-      top:-12px;               /* raise box 12 px above icon centre */
+      left:50%;           /* center horizontally over icon */
+      top:-38px;          /* height above icon; adjust if needed */
+      transform:translateX(-50%);
       background:#FFD700;color:#00253d;
       padding:2px 6px;border-radius:4px;
       font-size:11px;text-align:center;
@@ -72,7 +73,7 @@
 
     const toDate=s=>new Date(s.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
 
-    /* flag last Pool row of a ≥60-min session */
+    /* flag last Pool row of any ≥60-minute session */
     function poolFlags(rows,ts,loc){
       const f=new Array(rows.length).fill(false);
       for(let i=0;i<rows.length;){
@@ -92,11 +93,13 @@
       const rows=d.data||d.rows||[];
       if(!rows.length){line.style.display='none';return;}
 
-      const map={}; d.columns.forEach((c,i)=>map[(c.label||c.name).trim().toLowerCase()]=i);
-      const tsI=map['timestamp'], locI=map['location'];
+      /* column lookup by label lower-case */
+      const idx={}; d.columns.forEach((c,i)=>idx[(c.label||c.name).trim().toLowerCase()]=i);
+      const tsI=idx['timestamp'], locI=idx['location'];
 
       const note=poolFlags(rows,tsI,locI);
 
+      /* latest */
       let latest=0, latestDt=toDate(rows[0][tsI]);
       rows.forEach((r,i)=>{const t=toDate(r[tsI]); if(t>latestDt){latest=i;latestDt=t;} });
 
@@ -120,12 +123,13 @@
 
         if(note[i]){
           const nb=document.createElement('div'); nb.className='noteBox';
-          nb.innerHTML='Complementary<br>Drink Served';
+          nb.innerHTML='Complementary<br>Drink&nbsp;Served';
           ev.appendChild(nb);
         }
         tc.appendChild(ev);
       });
 
+      /* draw line if >1 event */
       if(rows.length<=1){
         line.style.display='none';
       }else{
@@ -134,7 +138,8 @@
           const evs=tc.querySelectorAll('.event');
           const start=evs[0].offsetLeft+evs[0].offsetWidth/2;
           const end  =evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
-          line.style.left=`${start}px`; line.style.width=`${end-start}px`;
+          line.style.left=`${start}px`;
+          line.style.width=`${end-start}px`;
         });
       }
     }
