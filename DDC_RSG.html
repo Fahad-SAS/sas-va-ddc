@@ -2,14 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SAS VA Timeline DDC – Two Offers</title>
+  <title>SAS VA Timeline DDC – Two Offers (transparent)</title>
   <script src="messagingUtil.js"></script>
 
   <style>
+    /* ─── Base layout ─────────────────────────────────────────── */
     body{
       font-family:Arial, sans-serif;
       padding:40px;
-      background:#00253d;
+      /* NO background => transparent */
       color:#fff;
       overflow-x:auto;
     }
@@ -23,6 +24,7 @@
       height:2px;background:#00BFFF;z-index:0;
     }
 
+    /* ─── Event block ─────────────────────────────────────────── */
     .event{
       position:relative;
       display:flex;flex-direction:column;align-items:center;
@@ -30,6 +32,7 @@
     }
 
     .iconRow{display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
+
     .icon{
       font-size:24px;line-height:24px;cursor:pointer;
       filter:drop-shadow(0 0 2px #00BFFF);
@@ -41,24 +44,18 @@
 
     .label{font-size:13px;text-align:center;line-height:1.35;}
 
-    /* gold note for complementary drink */
-    .noteBox{
-      position:absolute;
-      left:50%;top:-38px;transform:translateX(-50%);
+    /* ─── Offer boxes ─────────────────────────────────────────── */
+    .noteBox{                   /* gold – Complementary Drink */
+      position:absolute;left:50%;top:-38px;transform:translateX(-50%);
       background:#FFD700;color:#00253d;
       padding:2px 6px;border-radius:4px;
-      font-size:11px;text-align:center;line-height:1.15;
-      white-space:nowrap;
+      font-size:11px;text-align:center;line-height:1.15;white-space:nowrap;
     }
-
-    /* green note for late breakfast offer */
-    .offerBox{
-      position:absolute;
-      left:50%;top:-38px;transform:translateX(-50%);
+    .offerBox{                  /* green – Late Breakfast */
+      position:absolute;left:50%;top:-38px;transform:translateX(-50%);
       background:#90EE90;color:#00253d;
       padding:2px 6px;border-radius:4px;
-      font-size:11px;text-align:center;line-height:1.15;
-      white-space:nowrap;
+      font-size:11px;text-align:center;line-height:1.15;white-space:nowrap;
     }
   </style>
 </head>
@@ -70,29 +67,29 @@
   </div>
 
   <script>
+    /* icon map by location */
     const ICONS={
       "Pool":"🏊","Villa":"🏡","Beach":"🏖","Spa":"💆",
       "Restaurant":"🍽️","Reception":"🛎️","Jetty":"🚤",
       "Stargazing Deck":"🔭"
     };
 
-    /* helper to convert SAS datetime40 string → Date */
+    /* SAS DATETIME40 → JS Date */
     const toDate=s=>new Date(s.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
 
-    /* mark last Pool row of ≥60-min session */
+    /* last Pool row of ≥60-min session */
     function poolFlags(rows,ts,loc){
       const f=new Array(rows.length).fill(false);
       for(let i=0;i<rows.length;){
         if(rows[i][loc]!=='Pool'){i++;continue;}
         let start=i,end=i;
         while(end+1<rows.length&&rows[end+1][loc]==='Pool') end++;
-        if((toDate(rows[end][ts])-toDate(rows[start][ts]))/60000 >= 60) f[end]=true;
+        if((toDate(rows[end][ts])-toDate(rows[start][ts]))/60000>=60) f[end]=true;
         i=end+1;
       }
       return f;
     }
 
-    /* specific late-breakfast timestamp string */
     const breakfastKey='Saturday, July 5, 2025, 10:45:00 AM';
 
     function render(d){
@@ -102,64 +99,49 @@
       const rows=d.data||d.rows||[];
       if(!rows.length){line.style.display='none';return;}
 
-      const idx={}; d.columns.forEach((c,i)=>idx[(c.label||c.name).trim().toLowerCase()]=i);
-      const tsI=idx['timestamp'], locI=idx['location'];
+      const idx={};d.columns.forEach((c,i)=>idx[(c.label||c.name).trim().toLowerCase()]=i);
+      const tsI=idx['timestamp'],locI=idx['location'];
 
-      /* flags */
       const poolNote=poolFlags(rows,tsI,locI);
 
-      /* latest index */
-      let latest=0, latestDt=toDate(rows[0][tsI]);
-      rows.forEach((r,i)=>{const t=toDate(r[tsI]); if(t>latestDt){latest=i;latestDt=t;} });
+      let latest=0,latestDt=toDate(rows[0][tsI]);
+      rows.forEach((r,i)=>{const t=toDate(r[tsI]);if(t>latestDt){latest=i;latestDt=t;}});
 
       rows.forEach((r,i)=>{
-        const ts=r[tsI], loc=r[locI], iconChar=ICONS[loc]||'📍';
+        const ts=r[tsI],loc=r[locI],ico=ICONS[loc]||'📍';
 
-        const ev=document.createElement('div'); ev.className='event';
+        const ev=document.createElement('div');ev.className='event';
 
-        /* icon row */
-        const ir=document.createElement('div'); ir.className='iconRow';
-        const ic=document.createElement('div');
-        ic.className='icon'; if(i===latest) ic.classList.add('latest');
-        ic.textContent=iconChar;
-        ic.title=`${ts} – ${loc}`;
+        const ir=document.createElement('div');ir.className='iconRow';
+        const ic=document.createElement('div');ic.className='icon';
+        if(i===latest) ic.classList.add('latest');
+        ic.textContent=ico;ic.title=`${ts} – ${loc}`;
         ic.onclick=()=>va.messagingUtil.postSelectionMessage(d.resultName,[i]);
-        ir.appendChild(ic); ev.appendChild(ir);
+        ir.appendChild(ic);ev.appendChild(ir);
 
-        /* timestamp + location label */
-        const lbl=document.createElement('div'); lbl.className='label';
-        lbl.innerHTML=`<strong>${ts}</strong><br>${loc}`;
-        ev.appendChild(lbl);
+        const lbl=document.createElement('div');lbl.className='label';
+        lbl.innerHTML=`<strong>${ts}</strong><br>${loc}`;ev.appendChild(lbl);
 
-        /* gold drink note */
         if(poolNote[i]){
-          const nb=document.createElement('div');
-          nb.className='noteBox';
-          nb.innerHTML='Complementary<br>Drink Served';
-          ev.appendChild(nb);
+          const nb=document.createElement('div');nb.className='noteBox';
+          nb.innerHTML='Complementary<br>Drink Served';ev.appendChild(nb);
         }
-
-        /* green breakfast note */
         if(ts.trim()===breakfastKey){
-          const ob=document.createElement('div');
-          ob.className='offerBox';
-          ob.innerHTML='Late<br>Breakfast offer';
-          ev.appendChild(ob);
+          const ob=document.createElement('div');ob.className='offerBox';
+          ob.innerHTML='Late<br>Breakfast offer';ev.appendChild(ob);
         }
-
         tc.appendChild(ev);
       });
 
-      /* draw connector line only when >1 event */
       if(rows.length<=1){
         line.style.display='none';
       }else{
         line.style.display='';
         requestAnimationFrame(()=>{
           const evs=tc.querySelectorAll('.event');
-          const start=evs[0].offsetLeft+evs[0].offsetWidth/2;
-          const end  =evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
-          line.style.left=`${start}px`; line.style.width=`${end-start}px`;
+          const s=evs[0].offsetLeft+evs[0].offsetWidth/2;
+          const e=evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
+          line.style.left=`${s}px`;line.style.width=`${e-s}px`;
         });
       }
     }
