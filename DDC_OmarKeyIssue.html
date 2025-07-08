@@ -2,25 +2,55 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Guest Key-Issue Timeline – Action Boxes & Restaurant</title>
+  <title>Key-Issue Timeline – Restaurant & Maintenance</title>
   <script src="messagingUtil.js"></script>
 
   <style>
-    body{font-family:Arial, sans-serif;padding:40px;background:#00253d;color:#fff;overflow-x:auto;}
-    .wrap{position:relative;width:fit-content;}
-    .cont{display:flex;align-items:center;gap:50px;position:relative;z-index:1;}
-    .line{position:absolute;top:50%;transform:translateY(-50%);height:2px;background:#00BFFF;z-index:0;}
+    /* ── overall frame ───────────────────────────────────────── */
+    body{font-family:Arial, sans-serif;margin:0;color:#fff;overflow-x:auto;}
 
-    .event{position:relative;display:flex;flex-direction:column;align-items:center;width:160px;z-index:2;}
+    .wrap{
+      position:relative;
+      width:fit-content;
+      padding:32px;
+      background:rgba(0,37,61,.18);           /* translucent navy frame */
+      border-radius:8px;
+      box-shadow:0 4px 10px rgba(0,0,0,.12);
+      overflow:visible;                       /* let action box stick out */
+    }
+    .cont{display:flex;align-items:center;gap:48px;position:relative;z-index:1;}
+
+    .line{position:absolute;top:50%;transform:translateY(-50%);height:2px;background:#2FAEFF;z-index:0;}
+
+    /* ── event icon + label ──────────────────────────────────── */
+    .event{position:relative;display:flex;flex-direction:column;align-items:center;width:170px;z-index:2;}
+
     .iconRow{display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
-    .icon{font-size:24px;line-height:24px;cursor:pointer;filter:drop-shadow(0 0 2px #00BFFF);}
-    .icon.latest{font-size:32px;filter:drop-shadow(0 0 4px #FFD700);}
-    .label{font-size:12px;text-align:center;line-height:1.3;}
+    .icon{
+      font-size:26px;line-height:26px;cursor:pointer;
+      filter:drop-shadow(0 0 3px #2FAEFF);
+    }
+    .icon.latest{
+      font-size:34px;
+      filter:drop-shadow(0 0 5px #FFD700);
+    }
 
+    .label{
+      font-size:14px;
+      text-align:center;
+      line-height:1.32;
+      color:#e9eef2;
+    }
+
+    /* ── green maintenance box ──────────────────────────────── */
     .actionBox{
       position:absolute;left:50%;top:-38px;transform:translateX(-50%);
-      background:#90EE90;color:#00253d;padding:2px 6px;border-radius:4px;
-      font-size:11px;text-align:center;line-height:1.15;white-space:nowrap;
+      max-width:140px;
+      padding:4px 10px;border-radius:4px;
+      background:#90EE90;color:#00253d;
+      font-size:11px;text-align:center;line-height:1.15;
+      white-space:normal;                                /* wrap if needed */
+      box-shadow:0 0 2px rgba(0,0,0,.25);
       filter:drop-shadow(0 0 2px #193);
     }
   </style>
@@ -33,60 +63,55 @@
   </div>
 
   <script>
-    /* pick icon from event or location */
+    /* icon by event OR location */
     function chooseIcon(evt, loc){
-      evt = evt || '';
-      loc = loc || '';
-
-      if(/check-?in/i.test(evt))                 return '🛎️';
-      if(/unlock/i.test(evt))                    return '🔑';
-      if(/maintenance\s+arrived/i.test(evt))     return '🔧';
-      if(/resturant|restaurant/i.test(loc))      return '🍽️';   /* NEW */
+      evt = evt || '';  loc = loc || '';
+      if(/check-?in/i.test(evt))               return '🛎️';
+      if(/unlock/i.test(evt))                  return '🔑';
+      if(/maintenance\\s+arrived/i.test(evt))  return '🔧';
+      if(/resturant|restaurant/i.test(loc))    return '🍽️';   /* restaurant */
       return '📍';
     }
 
-    /* convert SAS DATETIME40 string to JS Date */
-    const toDate = s => new Date(s.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
+    const toDate=s=>new Date(s.replace(/^[A-Za-z]+,\\s*/,'').replace(/,/g,''));
 
     va.messagingUtil.setOnDataReceivedCallback(data=>{
-      const tc   = document.getElementById('tc');
-      const line = document.getElementById('tline');
+      const tc=document.getElementById('tc'), line=document.getElementById('tline');
       tc.innerHTML='';
 
-      const rows = data.data || data.rows || [];
+      const rows=data.data||data.rows||[];
       if(!rows.length){line.style.display='none';return;}
 
-      /* locate column indexes by label (lower-case) */
-      const col={};
-      data.columns.forEach((c,i)=>col[(c.label||c.name).trim().toLowerCase()]=i);
-      const tI=col['timestamp'], lI=col['location'], eI=col['guesteventtype'];
+      /* column indexes */
+      const idx={}; data.columns.forEach((c,i)=>idx[(c.label||c.name).trim().toLowerCase()]=i);
+      const tI=idx['timestamp'], lI=idx['location'], eI=idx['guesteventtype'];
 
-      /* latest displayed row */
-      let latest=0, latestDt=toDate(rows[0][tI]);
-      rows.forEach((r,i)=>{const d=toDate(r[tI]); if(d>latestDt){latest=i;latestDt=d;} });
+      /* latest */
+      let latest=0,latestDt=toDate(rows[0][tI]);
+      rows.forEach((r,i)=>{const d=toDate(r[tI]);if(d>latestDt){latest=i;latestDt=d;}});
 
       rows.forEach((r,i)=>{
-        const ts  = r[tI];
-        const loc = r[lI];
-        const evt = r[eI] || '';
+        const ts=r[tI], loc=r[lI], evt=r[eI]||'';
+        const icoChar=chooseIcon(evt, loc);
 
-        const ev = document.createElement('div'); ev.className='event';
+        const ev=document.createElement('div'); ev.className='event';
 
         /* icon */
-        const ir  = document.createElement('div'); ir.className='iconRow';
-        const ico = document.createElement('div');
+        const row=document.createElement('div'); row.className='iconRow';
+        const ico=document.createElement('div');
         ico.className='icon'; if(i===latest) ico.classList.add('latest');
-        ico.textContent = chooseIcon(evt, loc);
-        ico.title = `${ts} – ${evt || 'No event'} @ ${loc}`;
-        ir.appendChild(ico); ev.appendChild(ir);
+        ico.textContent=icoChar;
+        ico.title=`${ts} — ${loc}`;
+        row.appendChild(ico);
+        ev.appendChild(row);
 
-        /* 3-line label */
-        const lbl = document.createElement('div'); lbl.className='label';
-        lbl.innerHTML = `<strong>${ts}</strong><br>${loc}<br>${evt}`;
+        /* label */
+        const lbl=document.createElement('div'); lbl.className='label';
+        lbl.innerHTML=`<strong>${ts}</strong><br>${loc}<br>${evt}`;
         ev.appendChild(lbl);
 
-        /* show green box on “Unlock Attempt – fail #2” */
-        if(/unlock\s+attempt.*fail\s*#?2/i.test(evt)){
+        /* maintenance action */
+        if(/unlock\\s+attempt.*fail\\s*#?2/i.test(evt)){
           const ab=document.createElement('div'); ab.className='actionBox';
           ab.textContent='Send Maintenance';
           ev.appendChild(ab);
@@ -94,13 +119,13 @@
         tc.appendChild(ev);
       });
 
-      /* show connector line only when >1 event */
+      /* draw connector */
       if(rows.length<=1){
         line.style.display='none';
       }else{
         line.style.display='';
         requestAnimationFrame(()=>{
-          const evs=document.querySelectorAll('.event');
+          const evs=tc.querySelectorAll('.event');
           const s=evs[0].offsetLeft+evs[0].offsetWidth/2;
           const e=evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
           line.style.left=`${s}px`; line.style.width=`${e-s}px`;
