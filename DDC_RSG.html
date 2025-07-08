@@ -2,27 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Key-Issue Timeline – unclipped boxes</title>
+  <title>Guest Timeline – auto-height</title>
   <script src="messagingUtil.js"></script>
 
   <style>
-    /* ─── Frame ───────────────────────────── */
+    /* ---- translucent frame ---- */
     body{font-family:Arial, sans-serif;margin:0;color:#fff;overflow-x:auto;}
 
     .wrap{
       position:relative;
       width:fit-content;
       padding:32px;
-      background:rgba(0,37,61,.18);
+      background:rgba(0,37,61,.18);      /* soft navy */
       border-radius:8px;
       box-shadow:0 4px 10px rgba(0,0,0,.12);
-      overflow:visible;                 /* ✧ allow offer boxes to stick out */
+      overflow:visible;                  /* allow boxes to extend */
     }
     .cont{display:flex;align-items:center;gap:48px;position:relative;z-index:1;}
 
     .line{position:absolute;top:50%;transform:translateY(-50%);height:2px;background:#2FAEFF;z-index:0;}
 
-    /* ─── Event block ────────────────────── */
+    /* ---- event block ---- */
     .event{position:relative;display:flex;flex-direction:column;align-items:center;width:170px;z-index:2;}
 
     .iconRow{display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
@@ -31,14 +31,13 @@
 
     .label{font-size:14px;text-align:center;line-height:1.32;color:#e9eef2;}
 
-    /* ─── Offer / Note boxes ─────────────── */
+    /* ---- offer / note boxes ---- */
     .noteBox,.offerBox{
       position:absolute;left:50%;top:-38px;transform:translateX(-50%);
-      max-width:140px;
       padding:4px 10px;border-radius:4px;
-      font-size:11px;text-align:center;line-height:1.2;
+      font-size:11px;text-align:center;line-height:1.15;
+      max-width:160px;white-space:normal;
       box-shadow:0 0 2px rgba(0,0,0,.25);
-      white-space:normal;               /* ✧ wrap instead of cut */
     }
     .noteBox{background:#FFD700;color:#00253d;}
     .offerBox{background:#90EE90;color:#00253d;}
@@ -46,21 +45,21 @@
 </head>
 <body>
 
-  <div class="wrap">
+  <div class="wrap" id="wrap">
     <div class="line" id="tline"></div>
     <div class="cont" id="tc"></div>
   </div>
 
   <script>
-    /* icons by location */
+    /* icon by location */
     const ICONS={
       "Pool":"🏊","Villa":"🏡","Beach":"🏖","Spa":"💆",
       "Restaurant":"🍽️","Resturant":"🍽️","Reception":"🛎️",
       "Jetty":"🚤","Stargazing Deck":"🔭"
     };
-    const toDate=s=>new Date(s.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
+    const toDate=s=>new Date(s.replace(/^[A-Za-z]+,\\s*/,'').replace(/,/g,''));
 
-    /* gold drink flag */
+    /* gold drink box flag */
     function poolFlags(rows,tsI,locI){
       const f=new Array(rows.length).fill(false);
       for(let i=0;i<rows.length;){
@@ -74,55 +73,67 @@
     }
     const breakfastKey='Saturday, July 5, 2025, 10:45:00 AM';
 
-    va.messagingUtil.setOnDataReceivedCallback(d=>{
+    /* ask VA to resize iframe */
+    function sendHeight(){
+      const h=document.getElementById('wrap').offsetHeight+12;
+      if(window.va&&va.messagingUtil&&va.messagingUtil.postResizeMessage){
+        va.messagingUtil.postResizeMessage(h);
+      }
+    }
+
+    va.messagingUtil.setOnDataReceivedCallback(data=>{
       const tc=document.getElementById('tc'), line=document.getElementById('tline');
       tc.innerHTML='';
 
-      const rows=d.data||d.rows||[];
-      if(!rows.length){line.style.display='none';return;}
+      const rows=data.data||data.rows||[];
+      if(!rows.length){line.style.display='none';sendHeight();return;}
 
-      const idx={};d.columns.forEach((c,i)=>idx[(c.label||c.name).trim().toLowerCase()]=i);
-      const tsI=idx['timestamp'], locI=idx['location'];
+      const idx={};data.columns.forEach((c,i)=>idx[(c.label||c.name).trim().toLowerCase()]=i);
+      const tsI=idx['timestamp'],locI=idx['location'];
 
-      const poolNote=poolFlags(rows,tsI,locI);
+      const drink=poolFlags(rows,tsI,locI);
       let latest=0,latestDt=toDate(rows[0][tsI]);
-      rows.forEach((r,i)=>{const t=toDate(r[tsI]);if(t>latestDt){latest=i;latestDt=t;}});
+      rows.forEach((r,i)=>{const d=toDate(r[tsI]);if(d>latestDt){latest=i;latestDt=d;} });
 
       rows.forEach((r,i)=>{
         const ts=r[tsI], loc=r[locI], ico=ICONS[loc]||'📍';
 
-        const ev=document.createElement('div');ev.className='event';
+        const ev=document.createElement('div'); ev.className='event';
 
-        const ir=document.createElement('div');ir.className='iconRow';
-        const ic=document.createElement('div');ic.className='icon';if(i===latest)ic.classList.add('latest');
-        ic.textContent=ico;ic.title=`${ts} — ${loc}`;
-        ir.appendChild(ic);ev.appendChild(ir);
+        const ir=document.createElement('div'); ir.className='iconRow';
+        const ic=document.createElement('div'); ic.className='icon'; if(i===latest) ic.classList.add('latest');
+        ic.textContent=ico; ic.title=`${ts} — ${loc}`;
+        ir.appendChild(ic); ev.appendChild(ir);
 
-        const lbl=document.createElement('div');lbl.className='label';
-        lbl.innerHTML=`<strong>${ts}</strong><br>${loc}`;ev.appendChild(lbl);
+        const lbl=document.createElement('div'); lbl.className='label';
+        lbl.innerHTML=`<strong>${ts}</strong><br>${loc}`; ev.appendChild(lbl);
 
-        if(poolNote[i]){
-          const nb=document.createElement('div');nb.className='noteBox';
-          nb.innerHTML='Complementary<br>Drink Served';ev.appendChild(nb);
+        if(drink[i]){
+          const nb=document.createElement('div'); nb.className='noteBox';
+          nb.innerHTML='Complementary<br>Drink Served'; ev.appendChild(nb);
         }
         if(ts.trim()===breakfastKey){
-          const ob=document.createElement('div');ob.className='offerBox';
-          ob.innerHTML='Late<br>Breakfast offer';ev.appendChild(ob);
+          const ob=document.createElement('div'); ob.className='offerBox';
+          ob.innerHTML='Late<br>Breakfast offer'; ev.appendChild(ob);
         }
         tc.appendChild(ev);
       });
 
+      /* blue line */
       if(rows.length<=1){line.style.display='none';}
       else{
         line.style.display='';
         requestAnimationFrame(()=>{
-          const evs=document.querySelectorAll('.event');
+          const evs=tc.querySelectorAll('.event');
           const s=evs[0].offsetLeft+evs[0].offsetWidth/2;
           const e=evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
-          line.style.left=`${s}px`;line.style.width=`${e-s}px`;
+          line.style.left=`${s}px`; line.style.width=`${e-s}px`;
+          sendHeight();                    /* after layout update send height */
         });
       }
     });
+
+    window.addEventListener('resize',()=>setTimeout(sendHeight,60));
   </script>
 </body>
 </html>
