@@ -2,136 +2,113 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Key-Issue Timeline – Restaurant & Maintenance</title>
+  <title>Omar Key-Issue Timeline – box on Acceptance</title>
   <script src="messagingUtil.js"></script>
 
   <style>
-    /* ── overall frame ───────────────────────────────────────── */
     body{font-family:Arial, sans-serif;margin:0;color:#fff;overflow-x:auto;}
 
     .wrap{
-      position:relative;
-      width:fit-content;
-      padding:32px;
-      background:rgba(0,37,61,.18);           /* translucent navy frame */
-      border-radius:8px;
-      box-shadow:0 4px 10px rgba(0,0,0,.12);
-      overflow:visible;                       /* let action box stick out */
+      position:relative;width:fit-content;padding:32px;
+      background:rgba(0,37,61,.18);border-radius:8px;
+      box-shadow:0 4px 10px rgba(0,0,0,.12);overflow:visible;
     }
     .cont{display:flex;align-items:center;gap:48px;position:relative;z-index:1;}
-
     .line{position:absolute;top:50%;transform:translateY(-50%);height:2px;background:#2FAEFF;z-index:0;}
 
-    /* ── event icon + label ──────────────────────────────────── */
     .event{position:relative;display:flex;flex-direction:column;align-items:center;width:170px;z-index:2;}
-
     .iconRow{display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
-    .icon{
-      font-size:26px;line-height:26px;cursor:pointer;
-      filter:drop-shadow(0 0 3px #2FAEFF);
-    }
-    .icon.latest{
-      font-size:34px;
-      filter:drop-shadow(0 0 5px #FFD700);
-    }
+    .icon{font-size:26px;line-height:26px;cursor:pointer;filter:drop-shadow(0 0 3px #2FAEFF);}
+    .icon.latest{font-size:34px;filter:drop-shadow(0 0 5px #FFD700);}
+    .label{font-size:14px;text-align:center;line-height:1.32;color:#e9eef2;}
 
-    .label{
-      font-size:14px;
-      text-align:center;
-      line-height:1.32;
-      color:#e9eef2;
-    }
-
-    /* ── green maintenance box ──────────────────────────────── */
     .actionBox{
       position:absolute;left:50%;top:-38px;transform:translateX(-50%);
-      max-width:140px;
-      padding:4px 10px;border-radius:4px;
-      background:#90EE90;color:#00253d;
+      background:#90EE90;color:#00253d;padding:4px 10px;border-radius:4px;
       font-size:11px;text-align:center;line-height:1.15;
-      white-space:normal;                                /* wrap if needed */
-      box-shadow:0 0 2px rgba(0,0,0,.25);
-      filter:drop-shadow(0 0 2px #193);
+      max-width:160px;white-space:normal;
+      box-shadow:0 0 2px rgba(0,0,0,.25);filter:drop-shadow(0 0 2px #193);
     }
   </style>
 </head>
 <body>
 
-  <div class="wrap">
+  <div class="wrap" id="wrap">
     <div class="line" id="tline"></div>
     <div class="cont" id="tc"></div>
   </div>
 
   <script>
-    /* icon by event OR location */
-    function chooseIcon(evt, loc){
-      evt = evt || '';  loc = loc || '';
+    /* choose icon */
+    function iconFor(evt,loc){
+      evt=evt||''; loc=loc||'';
       if(/check-?in/i.test(evt))               return '🛎️';
       if(/unlock/i.test(evt))                  return '🔑';
       if(/maintenance\\s+arrived/i.test(evt))  return '🔧';
-      if(/resturant|restaurant/i.test(loc))    return '🍽️';   /* restaurant */
+      if(/restaurant|resturant/i.test(loc))    return '🍽️';
       return '📍';
     }
-
     const toDate=s=>new Date(s.replace(/^[A-Za-z]+,\\s*/,'').replace(/,/g,''));
+
+    /* tell VA to resize */
+    function sendHeight(){
+      const h=document.getElementById('wrap').offsetHeight+12;
+      if(window.va&&va.messagingUtil&&va.messagingUtil.postResizeMessage){
+        va.messagingUtil.postResizeMessage(h);
+      }
+    }
 
     va.messagingUtil.setOnDataReceivedCallback(data=>{
       const tc=document.getElementById('tc'), line=document.getElementById('tline');
       tc.innerHTML='';
 
       const rows=data.data||data.rows||[];
-      if(!rows.length){line.style.display='none';return;}
+      if(!rows.length){line.style.display='none';sendHeight();return;}
 
-      /* column indexes */
-      const idx={}; data.columns.forEach((c,i)=>idx[(c.label||c.name).trim().toLowerCase()]=i);
-      const tI=idx['timestamp'], lI=idx['location'], eI=idx['guesteventtype'];
+      const col={};data.columns.forEach((c,i)=>col[(c.label||c.name).trim().toLowerCase()]=i);
+      const tI=col['timestamp'], lI=col['location'], eI=col['guesteventtype'];
 
-      /* latest */
       let latest=0,latestDt=toDate(rows[0][tI]);
-      rows.forEach((r,i)=>{const d=toDate(r[tI]);if(d>latestDt){latest=i;latestDt=d;}});
+      rows.forEach((r,i)=>{const d=toDate(r[tI]); if(d>latestDt){latest=i;latestDt=d;} });
 
       rows.forEach((r,i)=>{
-        const ts=r[tI], loc=r[lI], evt=r[eI]||'';
-        const icoChar=chooseIcon(evt, loc);
+        const ts=r[tI], loc=r[lI], evt=(r[eI]||'').trim();
 
         const ev=document.createElement('div'); ev.className='event';
 
-        /* icon */
         const row=document.createElement('div'); row.className='iconRow';
-        const ico=document.createElement('div');
-        ico.className='icon'; if(i===latest) ico.classList.add('latest');
-        ico.textContent=icoChar;
-        ico.title=`${ts} — ${loc}`;
-        row.appendChild(ico);
-        ev.appendChild(row);
+        const ic=document.createElement('div'); ic.className='icon';
+        if(i===latest) ic.classList.add('latest');
+        ic.textContent=iconFor(evt,loc); ic.title=`${ts} — ${loc}`;
+        row.appendChild(ic); ev.appendChild(row);
 
-        /* label */
         const lbl=document.createElement('div'); lbl.className='label';
-        lbl.innerHTML=`<strong>${ts}</strong><br>${loc}<br>${evt}`;
-        ev.appendChild(lbl);
+        lbl.innerHTML=`<strong>${ts}</strong><br>${loc}<br>${evt}`; ev.appendChild(lbl);
 
-        /* maintenance action */
-        if(/unlock\\s+attempt.*fail\\s*#?2/i.test(evt)){
+        /* NEW rule — show box when evt contains “Acceptance” */
+        if(/acceptance/i.test(evt)){
           const ab=document.createElement('div'); ab.className='actionBox';
           ab.textContent='Send Maintenance';
           ev.appendChild(ab);
         }
+
         tc.appendChild(ev);
       });
 
-      /* draw connector */
-      if(rows.length<=1){
-        line.style.display='none';
-      }else{
+      if(rows.length<=1){line.style.display='none';}
+      else{
         line.style.display='';
         requestAnimationFrame(()=>{
-          const evs=tc.querySelectorAll('.event');
+          const evs=document.querySelectorAll('.event');
           const s=evs[0].offsetLeft+evs[0].offsetWidth/2;
           const e=evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
           line.style.left=`${s}px`; line.style.width=`${e-s}px`;
+          sendHeight();
         });
       }
     });
+
+    window.addEventListener('resize',()=>setTimeout(sendHeight,60));
   </script>
 </body>
 </html>
