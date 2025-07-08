@@ -2,62 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Key-Issue Timeline – Enhanced</title>
+  <title>Key-Issue Timeline – unclipped boxes</title>
   <script src="messagingUtil.js"></script>
 
   <style>
-    /* ───  FRAME & BACKDROP  ───────────────────────────── */
-    body{
-      font-family:Arial, sans-serif;
-      margin:0;
-      color:#fff;
-      overflow-x:auto;
-    }
+    /* ─── Frame ───────────────────────────── */
+    body{font-family:Arial, sans-serif;margin:0;color:#fff;overflow-x:auto;}
+
     .wrap{
       position:relative;
       width:fit-content;
-      padding:32px;                       /*   reduced */
-      background:rgba(0,37,61,.18);       /* ▼ translucent navy */
+      padding:32px;
+      background:rgba(0,37,61,.18);
       border-radius:8px;
       box-shadow:0 4px 10px rgba(0,0,0,.12);
+      overflow:visible;                 /* ✧ allow offer boxes to stick out */
     }
     .cont{display:flex;align-items:center;gap:48px;position:relative;z-index:1;}
 
-    /* ───  CONNECTOR  ─────────────────────────────────── */
-    .line{
-      position:absolute;
-      top:50%;transform:translateY(-50%);
-      height:2px;
-      background:#2FAEFF;                 /*  brighter */
-      z-index:0;
-    }
+    .line{position:absolute;top:50%;transform:translateY(-50%);height:2px;background:#2FAEFF;z-index:0;}
 
-    /* ───  EVENT  ─────────────────────────────────────── */
+    /* ─── Event block ────────────────────── */
     .event{position:relative;display:flex;flex-direction:column;align-items:center;width:170px;z-index:2;}
 
     .iconRow{display:flex;align-items:center;justify-content:center;margin-bottom:8px;}
-    .icon{
-      font-size:26px;line-height:26px;cursor:pointer;
-      filter:drop-shadow(0 0 3px #2FAEFF);
-    }
-    .icon.latest{
-      font-size:34px;
-      filter:drop-shadow(0 0 5px #FFD700);
-    }
+    .icon{font-size:26px;line-height:26px;cursor:pointer;filter:drop-shadow(0 0 3px #2FAEFF);}
+    .icon.latest{font-size:34px;filter:drop-shadow(0 0 5px #FFD700);}
 
-    .label{
-      font-size:14px;
-      text-align:center;
-      line-height:1.32;
-      color:#e9eef2;                      /* less glaring on light pages */
-    }
+    .label{font-size:14px;text-align:center;line-height:1.32;color:#e9eef2;}
 
-    /*  OFFER BOXES  */
+    /* ─── Offer / Note boxes ─────────────── */
     .noteBox,.offerBox{
       position:absolute;left:50%;top:-38px;transform:translateX(-50%);
-      padding:3px 8px;border-radius:4px;
-      font-size:11px;text-align:center;line-height:1.15;white-space:nowrap;
+      max-width:140px;
+      padding:4px 10px;border-radius:4px;
+      font-size:11px;text-align:center;line-height:1.2;
       box-shadow:0 0 2px rgba(0,0,0,.25);
+      white-space:normal;               /* ✧ wrap instead of cut */
     }
     .noteBox{background:#FFD700;color:#00253d;}
     .offerBox{background:#90EE90;color:#00253d;}
@@ -71,6 +52,7 @@
   </div>
 
   <script>
+    /* icons by location */
     const ICONS={
       "Pool":"🏊","Villa":"🏡","Beach":"🏖","Spa":"💆",
       "Restaurant":"🍽️","Resturant":"🍽️","Reception":"🛎️",
@@ -79,20 +61,19 @@
     const toDate=s=>new Date(s.replace(/^[A-Za-z]+,\s*/,'').replace(/,/g,''));
 
     /* gold drink flag */
-    function poolFlags(rows,ts,loc){
+    function poolFlags(rows,tsI,locI){
       const f=new Array(rows.length).fill(false);
       for(let i=0;i<rows.length;){
-        if(rows[i][loc]!=='Pool'){i++;continue;}
+        if(rows[i][locI]!=='Pool'){i++;continue;}
         let s=i,e=i;
-        while(e+1<rows.length&&rows[e+1][loc]==='Pool') e++;
-        if((toDate(rows[e][ts])-toDate(rows[s][ts]))/60000>=60) f[e]=true;
+        while(e+1<rows.length&&rows[e+1][locI]==='Pool') e++;
+        if((toDate(rows[e][tsI])-toDate(rows[s][tsI]))/60000>=60) f[e]=true;
         i=e+1;
       }
       return f;
     }
     const breakfastKey='Saturday, July 5, 2025, 10:45:00 AM';
 
-    /* render */
     va.messagingUtil.setOnDataReceivedCallback(d=>{
       const tc=document.getElementById('tc'), line=document.getElementById('tline');
       tc.innerHTML='';
@@ -101,20 +82,19 @@
       if(!rows.length){line.style.display='none';return;}
 
       const idx={};d.columns.forEach((c,i)=>idx[(c.label||c.name).trim().toLowerCase()]=i);
-      const tsI=idx['timestamp'],locI=idx['location'],evtI=idx['guesteventtype'];
+      const tsI=idx['timestamp'], locI=idx['location'];
 
       const poolNote=poolFlags(rows,tsI,locI);
       let latest=0,latestDt=toDate(rows[0][tsI]);
       rows.forEach((r,i)=>{const t=toDate(r[tsI]);if(t>latestDt){latest=i;latestDt=t;}});
 
       rows.forEach((r,i)=>{
-        const ts=r[tsI],loc=r[locI],evt=r[evtI]||'';
-        const ico=ICONS[loc]||'📍';
+        const ts=r[tsI], loc=r[locI], ico=ICONS[loc]||'📍';
 
         const ev=document.createElement('div');ev.className='event';
+
         const ir=document.createElement('div');ir.className='iconRow';
-        const ic=document.createElement('div');ic.className='icon';
-        if(i===latest) ic.classList.add('latest');
+        const ic=document.createElement('div');ic.className='icon';if(i===latest)ic.classList.add('latest');
         ic.textContent=ico;ic.title=`${ts} — ${loc}`;
         ir.appendChild(ic);ev.appendChild(ir);
 
@@ -132,12 +112,11 @@
         tc.appendChild(ev);
       });
 
-      if(rows.length<=1){
-        line.style.display='none';
-      }else{
+      if(rows.length<=1){line.style.display='none';}
+      else{
         line.style.display='';
         requestAnimationFrame(()=>{
-          const evs=tc.querySelectorAll('.event');
+          const evs=document.querySelectorAll('.event');
           const s=evs[0].offsetLeft+evs[0].offsetWidth/2;
           const e=evs[evs.length-1].offsetLeft+evs[evs.length-1].offsetWidth/2;
           line.style.left=`${s}px`;line.style.width=`${e-s}px`;
